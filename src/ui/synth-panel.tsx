@@ -142,7 +142,7 @@ function Oscillators() {
   )
 }
 
-export type SynthPage = "osc" | "layers"
+export type SynthPage = "osc" | "layers" | "filter"
 
 /**
  * The SYNTH page: two sub-pages behind small keys. OSC (the default) holds the
@@ -182,24 +182,19 @@ export function SynthPanel() {
   return (
     <Tabs data-osc-mod data-osc-synth orientation="vertical" value={page} onValueChange={(next: unknown) => setPage(next as SynthPage)}>
       <TabsList data-osc-subtabs aria-label="Synth pages">
-        <TabsTab value="osc" data-osc-subtab aria-label="Oscillators and filter">
+        <TabsTab value="osc" data-osc-subtab aria-label="Oscillators">
           Osc
         </TabsTab>
         <TabsTab value="layers" data-osc-subtab aria-label="Sub, noise and amp envelope">
           Sub·Amp
         </TabsTab>
+        <TabsTab value="filter" data-osc-subtab aria-label="Filter and voice">
+          Filter
+        </TabsTab>
       </TabsList>
       <TabsPanel value="osc" keepMounted data-osc-subpanel>
         <div data-osc-panel data-osc-synth-osc>
           <Oscillators />
-          <Module title="Filter" power={{ param: "filter.enabled", label: "Filter enabled" }}>
-            <ParamKnob param="filter.cutoff" label="Filter cutoff" legend="Cutoff" min={20} max={20000} step={1} taper={LOG} format={hertz} color="orange" resetValue={init.filter.cutoff} />
-            <ParamKnob param="filter.resonance" label="Filter resonance" legend="Res" {...unit} resetValue={init.filter.resonance} />
-            <div data-osc-stack data-osc-filter-mini>
-              <ParamKnob param="filter.drive" label="Filter drive" legend="Drive" {...unit} color="orange" resetValue={init.filter.drive} />
-              <ParamKnob param="filter.keytrack" label="Filter keytrack" legend="Key" {...unit} resetValue={init.filter.keytrack} />
-            </div>
-          </Module>
         </div>
       </TabsPanel>
       <TabsPanel value="layers" keepMounted data-osc-subpanel>
@@ -219,6 +214,16 @@ export function SynthPanel() {
             <ParamKnob param="env1.decay" label="Amp decay" legend="Decay" min={0} max={20} step={0.001} taper={power(4)} format={seconds} color="green" resetValue={init.env1.decay} />
             <ParamKnob param="env1.sustain" label="Amp sustain" legend="Sustain" {...unit} color="green" resetValue={init.env1.sustain} />
             <ParamKnob param="env1.release" label="Amp release" legend="Release" min={0} max={20} step={0.001} taper={power(4)} format={seconds} color="green" resetValue={init.env1.release} />
+          </Module>
+        </div>
+      </TabsPanel>
+      <TabsPanel value="filter" keepMounted data-osc-subpanel>
+        <div data-osc-panel data-osc-synth-filter>
+          <Module title="Filter" power={{ param: "filter.enabled", label: "Filter enabled" }}>
+            <ParamKnob param="filter.cutoff" label="Filter cutoff" legend="Cutoff" min={20} max={20000} step={1} taper={LOG} format={hertz} color="orange" resetValue={init.filter.cutoff} />
+            <ParamKnob param="filter.resonance" label="Filter resonance" legend="Res" {...unit} resetValue={init.filter.resonance} />
+            <ParamKnob param="filter.drive" label="Filter drive" legend="Drive" {...unit} color="orange" resetValue={init.filter.drive} />
+            <ParamKnob param="filter.keytrack" label="Filter keytrack" legend="Key" {...unit} resetValue={init.filter.keytrack} />
           </Module>
           <Module title="Voice">
             <GlideModeSwitch />

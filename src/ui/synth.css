@@ -6,14 +6,16 @@
   gap: 4px;
 }
 
-/* OSC sub-page: the oscillator place, then the filter. */
+/* OSC sub-page: the oscillators, full width. */
 [data-osc-synth-osc] {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 
-[data-osc-synth-layers] {
-  grid-template-columns: repeat(4, auto);
+/* SUB·AMP and FILTER sub-pages: modules left to right. */
+[data-osc-synth-layers],
+[data-osc-synth-filter] {
+  grid-template-columns: repeat(3, auto);
   justify-content: start;
   gap: 8px;
 }
@@ -163,7 +165,8 @@
 }
 
 /* Sub octave and shape: short vertical slide switches. */
-[data-osc-synth-layers] [data-osc-slide] [data-kit="slide-switch"] {
+[data-osc-synth-layers] [data-osc-slide] [data-kit="slide-switch"],
+[data-osc-synth-filter] [data-osc-slide] [data-kit="slide-switch"] {
   zoom: 0.8;
 }
 
@@ -171,10 +174,4 @@
 [data-osc-oscbody] [data-osc-dial-wrap] {
   zoom: 0.62;
   margin-top: 0;
-}
-
-/* Filter drive and keytrack: two small knobs stacked beside cutoff and res. */
-[data-osc-filter-mini] {
-  zoom: 0.52;
-  gap: 0;
 }
