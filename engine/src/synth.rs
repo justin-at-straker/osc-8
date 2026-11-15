@@ -192,6 +192,10 @@ struct Noise {
 #[derive(Clone, Copy)]
 struct Voice {
     note: u8,
+    /// Sounding pitch in semitones: `note`, or on its way there while gliding.
+    pitch: f32,
+    /// Semitones added per control tick while gliding (0 = not gliding).
+    glide_step: f32,
     velocity: f32,
     gate: bool,
     env: Envelope,
@@ -213,6 +217,8 @@ impl Voice {
     const fn idle() -> Self {
         Self {
             note: 0,
+            pitch: 0.0,
+            glide_step: 0.0,
             velocity: 0.0,
             gate: false,
             env: Envelope::IDLE,
@@ -386,7 +392,7 @@ fn osc_targets(
     k: &OscKnobs,
     ids: &OscIds,
     off: &[f32; TARGET_SLOTS],
-    note: u8,
+    pitch: f32,
     velocity: f32,
     layout: &UnisonLayout,
     sample_rate: f32,
@@ -394,7 +400,7 @@ fn osc_targets(
     let o = |id: u32| if (id as usize) < TARGET_SLOTS { off[id as usize] } else { 0.0 };
     let semi = apply(ids.semi, k.semi, o(ids.semi));
     let fine = apply(ids.fine, k.fine, o(ids.fine));
-    let semis = note as f32 - 69.0 + 12.0 * k.octave + semi + fine / 100.0;
+    let semis = pitch - 69.0 + 12.0 * k.octave + semi + fine / 100.0;
     let center_inc = 440.0 * (semis / 12.0).exp2() / sample_rate;
     let detune = apply(ids.detune, k.detune.value, o(ids.detune)) * DETUNE_SEMITONES;
     let pan = apply(ids.pan, k.pan.value, o(ids.pan));
@@ -509,8 +515,8 @@ fn voice_targets(k: &Knobs, m: &ModMatrix, v: &Voice, layout: &UnisonLayout, sam
         m.offsets(&v.mods.sources(m, v.env.level), &mut off);
     }
     let o = |id: u32| off[id as usize];
-    let a = osc_targets(&k.a, &IDS_A, &off, v.note, v.velocity, layout, sample_rate);
-    let b = osc_targets(&k.b, &IDS_B, &off, v.note, v.velocity, layout, sample_rate);
+    let a = osc_targets(&k.a, &IDS_A, &off, v.pitch, v.velocity, layout, sample_rate);
+    let b = osc_targets(&k.b, &IDS_B, &off, v.pitch, v.velocity, layout, sample_rate);
     let cutoff = apply(FILTER_CUTOFF, k.log_cutoff.value.exp(), o(FILTER_CUTOFF)).clamp(20.0, 0.45 * sample_rate);
     let res = apply(FILTER_RESONANCE, k.resonance.value, o(FILTER_RESONANCE)).clamp(0.0, 1.0);
     let x = &k.x;
@@ -575,6 +581,48 @@ pub struct WavetableSynth {
     matrix: ModMatrix,
     shadow: Shadow,
     global: GlobalMod,
+    voicing: Voicing,
+}
+
+/// Mono/glide state. In mono mode voice 0 plays every note.
+struct Voicing {
+    mono: bool,
+    legato: bool,
+    /// Seconds.
+    glide: f32,
+    /// Keys held, oldest first; releasing the newest returns to the one before.
+    held: [u8; MAX_HELD],
+    held_len: usize,
+    /// The mono voice was released by a note-off with nothing rendered since,
+    /// so a note-on now (the sequencer's next step) still counts as legato.
+    just_released: bool,
+    /// The last mono note, to glide from once the voice has gone idle.
+    last: Option<f32>,
+}
+
+const MAX_HELD: usize = 16;
+
+impl Voicing {
+    fn press(&mut self, note: u8) {
+        self.release(note);
+        if self.held_len == MAX_HELD {
+            self.held.copy_within(1.., 0);
+            self.held_len -= 1;
+        }
+        self.held[self.held_len] = note;
+        self.held_len += 1;
+    }
+
+    fn release(&mut self, note: u8) {
+        if let Some(i) = self.held[..self.held_len].iter().position(|&n| n == note) {
+            self.held.copy_within(i + 1..self.held_len, i);
+            self.held_len -= 1;
+        }
+    }
+
+    fn top(&self) -> Option<u8> {
+        self.held[..self.held_len].last().copied()
+    }
 }
 
 impl WavetableSynth {
@@ -612,6 +660,7 @@ impl WavetableSynth {
             matrix: ModMatrix::new(sample_rate),
             shadow: Shadow { note: 60, env1: Envelope::IDLE, mods: ModVoice::IDLE },
             global: GlobalMod::NONE,
+            voicing: Voicing { mono: false, legato: false, glide: 0.0, held: [0; MAX_HELD], held_len: 0, just_released: false, last: None },
         }
     }
 
@@ -662,6 +711,38 @@ impl WavetableSynth {
         (oldest, false)
     }
 
+    /// Mono: which voice, whether it starts fresh, whether the envelopes
+    /// retrigger, and the pitch to glide from (None = start on the note).
+    fn mono_voice(&self, note: u8) -> (usize, bool, bool, Option<f32>) {
+        let v = &self.voices[0];
+        let sounding = v.active();
+        let legato = sounding && (v.gate || self.voicing.just_released);
+        let glides = self.voicing.glide > 0.0 && (legato || !self.voicing.legato);
+        let from = if !glides {
+            None
+        } else if sounding {
+            Some(v.pitch)
+        } else {
+            self.voicing.last
+        };
+        // A legato note slides without a new attack; the same note again re-strikes.
+        let retrigger = !legato || v.note == note;
+        (0, !sounding, retrigger, from)
+    }
+
+    /// Semitones per control tick to cover `from -> note` in the glide time.
+    fn glide_step(&self, from: f32, note: u8) -> f32 {
+        let ticks = (self.voicing.glide * self.sample_rate / CONTROL as f32).max(1.0);
+        (note as f32 - from) / ticks
+    }
+
+    fn set_mono(&mut self, mono: bool) {
+        if mono != self.voicing.mono {
+            self.voicing.mono = mono;
+            self.all_notes_off();
+        }
+    }
+
     fn control_tick(&mut self) {
         // Knob smoothers are timed in control ticks: one step each.
         self.knobs.tick();
@@ -683,6 +764,14 @@ impl WavetableSynth {
                 continue;
             }
             v.mods.advance(m, CONTROL, &mut self.rng);
+            if v.glide_step != 0.0 {
+                v.pitch += v.glide_step;
+                let target = v.note as f32;
+                if (v.glide_step > 0.0) == (v.pitch >= target) {
+                    v.pitch = target;
+                    v.glide_step = 0.0;
+                }
+            }
             let t = voice_targets(&self.knobs, m, v, &self.layout, sr);
             for ((d, t), c) in v.dctl.iter_mut().zip(t.ctl).zip(v.ctl) {
                 *d = (t - c) * k;
@@ -855,12 +944,33 @@ impl Instrument for WavetableSynth {
             self.note_off(note);
             return;
         }
-        let (i, fresh) = self.pick_voice(note);
+        let (i, fresh, retrigger, from) = if self.voicing.mono {
+            self.voicing.press(note);
+            self.mono_voice(note)
+        } else {
+            let (i, fresh) = self.pick_voice(note);
+            (i, fresh, true, None)
+        };
+        let step = from.map_or(0.0, |f| self.glide_step(f, note));
         self.age += 1;
+        self.voicing.just_released = false;
+        if self.voicing.mono {
+            self.voicing.last = Some(note as f32);
+        }
         let sr = self.sample_rate;
         let v = &mut self.voices[i];
         if fresh {
             *v = Voice::idle();
+        }
+        match from {
+            Some(f) if step != 0.0 => {
+                v.pitch = f;
+                v.glide_step = step;
+            }
+            _ => {
+                v.pitch = note as f32;
+                v.glide_step = 0.0;
+            }
         }
         // Stolen/retriggered voices keep phases, filter state, env level and
         // control values so there is no discontinuity; the attack ramps from
@@ -869,8 +979,10 @@ impl Instrument for WavetableSynth {
         v.velocity = velocity.clamp(0.0, 1.0);
         v.gate = true;
         v.age = self.age;
-        v.env.gate_on();
-        v.mods.trigger(note, v.velocity, &mut self.rng);
+        if retrigger {
+            v.env.gate_on();
+            v.mods.trigger(note, v.velocity, &mut self.rng);
+        }
         if fresh {
             let k = &self.knobs;
             v.a.start(k.a.phase, k.a.random_phase, &mut self.rng);
@@ -888,6 +1000,27 @@ impl Instrument for WavetableSynth {
     }
 
     fn note_off(&mut self, note: u8) {
+        if self.voicing.mono {
+            self.voicing.release(note);
+            let back = self.voicing.top();
+            let v = &self.voices[0];
+            if v.gate && v.note == note {
+                if let Some(prev) = back {
+                    // Still holding an earlier key: slide back to it, legato.
+                    let step = if self.voicing.glide > 0.0 { self.glide_step(v.pitch, prev) } else { 0.0 };
+                    let v = &mut self.voices[0];
+                    v.note = prev;
+                    v.glide_step = step;
+                    if step == 0.0 {
+                        v.pitch = prev as f32;
+                    }
+                    self.voicing.last = Some(prev as f32);
+                    self.shadow.note = prev;
+                    return;
+                }
+                self.voicing.just_released = true;
+            }
+        }
         for v in self.voices.iter_mut() {
             if v.gate && v.note == note {
                 v.gate = false;
@@ -902,6 +1035,7 @@ impl Instrument for WavetableSynth {
     }
 
     fn all_notes_off(&mut self) {
+        self.voicing.held_len = 0;
         for v in self.voices.iter_mut() {
             v.gate = false;
             v.env.gate_off();
@@ -984,12 +1118,18 @@ impl WavetableSynth {
             NOISE_LEVEL => k.x.noise_level.target = value.clamp(0.0, 1.0),
             NOISE_COLOR => k.x.noise_color.target = value.clamp(0.0, 1.0),
             NOISE_TO_FILTER => k.x.noise_to_filter.target = on(value),
+            VOICE_MODE => self.set_mono(value >= 0.5),
+            VOICE_LEGATO => self.voicing.legato = value >= 0.5,
+            GLIDE_TIME => self.voicing.glide = value.clamp(0.0, 2.0),
             _ => {}
         }
     }
 
     fn render_impl(&mut self, left: &mut [f32], right: &mut [f32]) {
         let n = left.len().min(right.len());
+        if n > 0 {
+            self.voicing.just_released = false;
+        }
         left[..n].fill(0.0);
         right[..n].fill(0.0);
         let mut pos = 0;
@@ -1062,5 +1202,94 @@ mod tests {
             let exact = (s / 12.0).exp2();
             assert!((semitone_ratio(s) / exact - 1.0).abs() < 1e-6, "{s}");
         }
+    }
+
+    fn hz(note: f32) -> f32 {
+        440.0 * ((note - 69.0) / 12.0).exp2()
+    }
+
+    fn render_ms(s: &mut WavetableSynth, ms: usize) {
+        let n = 48 * ms;
+        let (mut l, mut r) = (vec![0.0; n], vec![0.0; n]);
+        s.render(&mut l, &mut r);
+    }
+
+    fn mono(glide: f32, legato: bool) -> WavetableSynth {
+        let mut s = WavetableSynth::new(48000.0);
+        s.set_param(VOICE_MODE, 1.0);
+        s.set_param(VOICE_LEGATO, if legato { 1.0 } else { 0.0 });
+        s.set_param(GLIDE_TIME, glide);
+        s
+    }
+
+    #[test]
+    fn poly_ignores_glide() {
+        let mut s = WavetableSynth::new(48000.0);
+        s.set_param(GLIDE_TIME, 0.1);
+        s.note_on(48, 1.0);
+        render_ms(&mut s, 10);
+        s.note_on(60, 1.0);
+        render_ms(&mut s, 1);
+        assert_eq!(s.active_voices(), 2);
+        assert!((s.unison_freqs(60, 0)[0] / hz(60.0) - 1.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn mono_legato_glides_between_held_notes() {
+        let mut s = mono(0.1, true);
+        s.note_on(48, 1.0);
+        render_ms(&mut s, 20);
+        s.note_on(60, 1.0);
+        assert_eq!(s.active_voices(), 1);
+        render_ms(&mut s, 50);
+        let mid = s.unison_freqs(60, 0)[0];
+        assert!(mid > hz(52.0) && mid < hz(57.0), "halfway through the glide, got {mid}");
+        render_ms(&mut s, 60);
+        assert!((s.unison_freqs(60, 0)[0] / hz(60.0) - 1.0).abs() < 1e-3);
+        // Releasing the top key slides back to the one still held.
+        s.note_off(60);
+        render_ms(&mut s, 120);
+        assert!((s.unison_freqs(48, 0)[0] / hz(48.0) - 1.0).abs() < 1e-3);
+        assert!(s.voices[0].gate);
+    }
+
+    #[test]
+    fn mono_legato_glides_across_touching_sequencer_steps() {
+        let mut s = mono(0.1, true);
+        s.note_on(48, 1.0);
+        render_ms(&mut s, 20);
+        // A step boundary: the old note's off, then the new note's on, same sample.
+        s.note_off(48);
+        s.note_on(60, 1.0);
+        render_ms(&mut s, 50);
+        let mid = s.unison_freqs(60, 0)[0];
+        assert!(mid < hz(58.0), "should still be gliding, got {mid}");
+    }
+
+    #[test]
+    fn mono_legato_detached_notes_jump() {
+        let mut s = mono(0.1, true);
+        s.set_param(ENV1_RELEASE, 0.5);
+        s.note_on(48, 1.0);
+        render_ms(&mut s, 20);
+        s.note_off(48);
+        render_ms(&mut s, 5);
+        s.note_on(60, 1.0);
+        render_ms(&mut s, 1);
+        assert!((s.unison_freqs(60, 0)[0] / hz(60.0) - 1.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn mono_always_glides_even_detached() {
+        let mut s = mono(0.1, false);
+        s.note_on(48, 1.0);
+        render_ms(&mut s, 20);
+        s.note_off(48);
+        render_ms(&mut s, 500);
+        assert_eq!(s.active_voices(), 0);
+        s.note_on(60, 1.0);
+        render_ms(&mut s, 50);
+        let mid = s.unison_freqs(60, 0)[0];
+        assert!(mid > hz(52.0) && mid < hz(57.0), "got {mid}");
     }
 }

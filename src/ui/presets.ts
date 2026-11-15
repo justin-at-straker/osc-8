@@ -71,6 +71,8 @@ export const FACTORY_PRESETS: Patch[] = [
       ott: { enabled: true, depth: 0.35, time: 0.4 },
       eq: { enabled: true, low: 1, mid: 1, high: -1 },
     },
+    // Mono legato: touching notes in the bassline slide instead of re-striking.
+    voicing: { mode: "mono", legato: true, glide: 0.06 },
     master: { volume: 0.72 },
   }),
   preset("reese-drift", "BS Reese Drift", {

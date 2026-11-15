@@ -13,7 +13,7 @@
 }
 
 [data-osc-synth-layers] {
-  grid-template-columns: repeat(3, auto);
+  grid-template-columns: repeat(4, auto);
   justify-content: start;
   gap: 8px;
 }

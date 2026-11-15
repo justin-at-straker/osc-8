@@ -4,6 +4,8 @@ import { BUILTIN_TABLES, defaultPatch } from "@/engine/patch"
 import { formatColor, formatPan, LOG, power } from "./taper"
 import { ParamDial, ParamKnob, ParamSlide, ParamStepper, ParamSwitch } from "./controls"
 import { usePatchValue, writePatchValue } from "./use-patch"
+import { SlideSwitch } from "@/components/ui/slide-switch"
+import { editPatch } from "@/state/store"
 import { Module } from "./module"
 
 const init = defaultPatch()
@@ -147,6 +149,34 @@ export type SynthPage = "osc" | "layers"
  * oscillators and the filter, the knobs turned most; SUB/AMP holds the sub,
  * noise and amp envelope. Master volume lives in the transport strip.
  */
+const GLIDE_MODES = ["Off", "Always", "Legato"] as const
+type GlideMode = (typeof GLIDE_MODES)[number]
+
+/**
+ * One switch over two patch fields: Off is poly; Always and Legato are mono,
+ * with voicing.legato choosing whether every note glides or only overlapping
+ * (and touching) ones.
+ */
+function GlideModeSwitch() {
+  const mode = usePatchValue<"poly" | "mono">("voicing.mode")
+  const legato = usePatchValue<boolean>("voicing.legato")
+  const value: GlideMode = mode === "poly" ? "Off" : legato ? "Legato" : "Always"
+  return (
+    <div data-param="voicing.mode" data-osc-slide>
+      <SlideSwitch
+        label="Glide mode"
+        options={[...GLIDE_MODES]}
+        value={value}
+        orientation="vertical"
+        onValueChange={(next) => {
+          const m = next as GlideMode
+          editPatch({ voicing: { mode: m === "Off" ? "poly" : "mono", legato: m === "Legato" } })
+        }}
+      />
+    </div>
+  )
+}
+
 export function SynthPanel() {
   const [page, setPage] = React.useState<SynthPage>("osc")
   return (
@@ -185,6 +215,10 @@ export function SynthPanel() {
             <ParamKnob param="env1.decay" label="Amp decay" legend="Decay" min={0} max={20} step={0.001} taper={power(4)} format={seconds} color="green" resetValue={init.env1.decay} />
             <ParamKnob param="env1.sustain" label="Amp sustain" legend="Sustain" {...unit} color="green" resetValue={init.env1.sustain} />
             <ParamKnob param="env1.release" label="Amp release" legend="Release" min={0} max={20} step={0.001} taper={power(4)} format={seconds} color="green" resetValue={init.env1.release} />
+          </Module>
+          <Module title="Glide">
+            <GlideModeSwitch />
+            <ParamKnob param="voicing.glide" label="Glide time" legend="Time" min={0} max={2} step={0.001} taper={power(3)} format={seconds} color="orange" resetValue={0.06} />
           </Module>
         </div>
       </TabsPanel>

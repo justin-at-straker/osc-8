@@ -61,7 +61,8 @@ fn param_ids_match_params_ts() {
     }
     assert_eq!(BASE_PARAM_COUNT as usize, ids.len());
     assert_eq!(MOD_END, 131);
-    assert_eq!(PARAM_COUNT, 164);
+    assert_eq!(PARAM_COUNT, 167);
+    assert_eq!((VOICE_MODE, VOICE_LEGATO, GLIDE_TIME), (164, 165, 166));
 }
 
 #[test]

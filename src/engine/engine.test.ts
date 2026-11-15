@@ -283,7 +283,7 @@ describe("osc8.wasm FX chain (ids 14..38)", () => {
 })
 
 describe("osc8.wasm modulation (ids 39..130)", () => {
-  const modValues = (e: Exports) => new Float32Array(e.memory.buffer, e.mod_values_ptr(), 164)
+  const modValues = (e: Exports) => new Float32Array(e.memory.buffer, e.mod_values_ptr(), 167)
 
   it("the default patch has no live routes and reads back knob values", async () => {
     const e = await withPatch(defaultPatch())

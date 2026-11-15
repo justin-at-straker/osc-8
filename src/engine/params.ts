@@ -97,6 +97,10 @@ export const PARAMS = [
   [161, "noise.level", (p: Patch) => p.noise.level],
   [162, "noise.color", (p: Patch) => p.noise.color], // 0 dark (brown-ish) .. 0.5 white .. 1 bright (blue-ish)
   [163, "noise.toFilter", (p: Patch) => (p.noise.toFilter ? 1 : 0)],
+  // Voicing: mono plays one voice with last-note priority; glide only acts in mono.
+  [164, "voicing.mode", (p: Patch) => (p.voicing.mode === "mono" ? 1 : 0)],
+  [165, "voicing.legato", (p: Patch) => (p.voicing.legato ? 1 : 0)], // glide only between overlapping/touching notes, no retrigger
+  [166, "voicing.glide", (p: Patch) => p.voicing.glide], // seconds, 0..2
 ] as const
 
 export type ParamKey = (typeof PARAMS)[number][1]

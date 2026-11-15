@@ -172,5 +172,15 @@ pub const NOISE_LEVEL: u32 = 161;
 pub const NOISE_COLOR: u32 = 162;
 pub const NOISE_TO_FILTER: u32 = 163;
 
+// Voicing (IDs 164..166).
+
+/// 0 = poly, 1 = mono (one voice, last-note priority, glide).
+pub const VOICE_MODE: u32 = 164;
+/// 0/1. Mono only: glide only between overlapping (or touching) notes, without
+/// retriggering the envelopes; off, every note glides from the last.
+pub const VOICE_LEGATO: u32 = 165;
+/// Seconds, 0..2: time to glide to a new note (mono only; 0 = no glide).
+pub const GLIDE_TIME: u32 = 166;
+
 /// Number of parameter IDs this engine understands (max ID + 1).
-pub const PARAM_COUNT: u32 = 164;
+pub const PARAM_COUNT: u32 = 167;
