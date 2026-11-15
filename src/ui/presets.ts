@@ -274,6 +274,24 @@ export const FACTORY_PRESETS: Patch[] = [
     },
     master: { volume: 0.6 },
   }),
+  // ---- 80s ----
+  preset("poly-brass", "KY 80s Poly Brass", {
+    oscA: { table: table("pwm"), position: 0.45, level: 0.75, unison: 3, detune: 0.12, blend: 0.7, spread: 0.7 },
+    oscB: { enabled: true, table: table("basic"), position: 0.66, fine: 7, level: 0.5, unison: 2, detune: 0.08, spread: 0.6 },
+    sub: { enabled: true, level: 0.2, octave: -1, shape: "square" },
+    filter: { cutoff: 1300, resonance: 0.2 },
+    env1: { attack: 0.012, decay: 0.6, sustain: 0.7, release: 0.35 },
+    env2: { attack: 0.03, decay: 0.35, sustain: 0.3, release: 0.3 },
+    lfos: lfos({ sync: false, rate: 5.2 }),
+    mod: [route("env2", "filter.cutoff", 0.38), route("velocity", "filter.cutoff", 0.12), route("lfo1", "oscA.fine", 0.025)],
+    fx: {
+      chorus: { enabled: true, rate: 0.5, depth: 0.6, mix: 0.45 },
+      delay: { enabled: true, time: "1/4", feedback: 0.25, mix: 0.12, pingPong: true },
+      reverb: { enabled: true, size: 0.75, decay: 0.55, damping: 0.5, mix: 0.28 },
+      eq: { enabled: true, low: -1, mid: 1.5, high: 1 },
+    },
+    master: { volume: 0.62 },
+  }),
   // ---- Showcase: big unison stacks ----
   preset("super-saw", "LD Super Saw", {
     oscA: { table: table("basic"), position: 0.66, level: 0.75, unison: 9, detune: 0.3, blend: 0.85, spread: 1 },
@@ -307,7 +325,7 @@ export const FACTORY_PRESETS: Patch[] = [
   }),
 ]
 
-/** The patch loaded at startup: the big unison lead the default riff is written for. */
-export const DEFAULT_PRESET_ID = "factory/super-saw"
+/** The patch loaded at startup: the 80s poly brass the default hook is written for. */
+export const DEFAULT_PRESET_ID = "factory/poly-brass"
 
 export const presetCategory = (p: Patch) => p.name.slice(0, 2) as PresetCategory
