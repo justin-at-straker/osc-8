@@ -10,8 +10,8 @@ use crate::dsp::fast_sin;
 use crate::envelope::{Adsr, Envelope};
 use crate::params::*;
 
-/// Mod targets are plain params, IDs 0..BASE_PARAM_COUNT.
-pub const TARGET_SLOTS: usize = BASE_PARAM_COUNT as usize;
+/// Per-param arrays (offsets, readback) are indexed by param ID: 0..PARAM_COUNT.
+pub const TARGET_SLOTS: usize = PARAM_COUNT as usize;
 
 /// MOD_SOURCES indices.
 pub mod src {
@@ -41,11 +41,24 @@ const fn t(id: u32, min: f32, max: f32) -> Target {
 }
 
 /// Mirrors MOD_TARGETS in src/engine/params.ts.
-pub const TARGETS: [Target; 18] = [
+pub const TARGETS: [Target; 31] = [
     t(OSC_A_POSITION, 0.0, 1.0),
     t(OSC_A_LEVEL, 0.0, 1.0),
     t(OSC_A_SEMI, -24.0, 24.0),
     t(OSC_A_FINE, -100.0, 100.0),
+    t(OSC_A_PAN, -1.0, 1.0),
+    t(OSC_A_DETUNE, 0.0, 1.0),
+    t(OSC_A_BLEND, 0.0, 1.0),
+    t(OSC_A_SPREAD, 0.0, 1.0),
+    t(OSC_B_POSITION, 0.0, 1.0),
+    t(OSC_B_LEVEL, 0.0, 1.0),
+    t(OSC_B_PAN, -1.0, 1.0),
+    t(OSC_B_SEMI, -24.0, 24.0),
+    t(OSC_B_FINE, -100.0, 100.0),
+    t(OSC_B_DETUNE, 0.0, 1.0),
+    t(SUB_LEVEL, 0.0, 1.0),
+    t(NOISE_LEVEL, 0.0, 1.0),
+    t(NOISE_COLOR, 0.0, 1.0),
     Target { id: FILTER_CUTOFF, min: 20.0, max: 20000.0, log: true },
     t(FILTER_RESONANCE, 0.0, 1.0),
     t(MASTER_VOLUME, 0.0, 1.0),
@@ -63,7 +76,17 @@ pub const TARGETS: [Target; 18] = [
 ];
 
 /// Targets rendered per voice inside the synth; the rest are global (master/FX).
-pub const VOICE_TARGETS: [u32; 6] = [OSC_A_POSITION, OSC_A_LEVEL, OSC_A_SEMI, OSC_A_FINE, FILTER_CUTOFF, FILTER_RESONANCE];
+pub const VOICE_TARGETS: [u32; 19] = [
+    OSC_A_POSITION, OSC_A_LEVEL, OSC_A_SEMI, OSC_A_FINE, OSC_A_PAN, OSC_A_DETUNE, OSC_A_BLEND, OSC_A_SPREAD,
+    OSC_B_POSITION, OSC_B_LEVEL, OSC_B_PAN, OSC_B_SEMI, OSC_B_FINE, OSC_B_DETUNE,
+    SUB_LEVEL, NOISE_LEVEL, NOISE_COLOR, FILTER_CUTOFF, FILTER_RESONANCE,
+];
+
+/// Master/FX targets, applied by the engine once per block.
+#[inline]
+pub fn is_global_target(id: u32) -> bool {
+    id == MASTER_VOLUME || (FX_FIRST..BASE_PARAM_COUNT).contains(&id)
+}
 
 pub fn target(id: u32) -> Option<&'static Target> {
     TARGETS.iter().find(|t| t.id == id)
@@ -167,9 +190,9 @@ impl ModMatrix {
         }
     }
 
-    /// Handle a modulation param (IDs LFO_BASE..PARAM_COUNT). Returns false for other IDs.
+    /// Handle a modulation param (IDs LFO_BASE..MOD_END). Returns false for other IDs.
     pub fn set_param(&mut self, id: u32, value: f32) -> bool {
-        if !(LFO_BASE..PARAM_COUNT).contains(&id) {
+        if !(LFO_BASE..MOD_END).contains(&id) {
             return false;
         }
         if !value.is_finite() {

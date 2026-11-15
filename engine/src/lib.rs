@@ -2,6 +2,7 @@
 //! AudioWorklet through the raw C ABI below (see `src/engine/protocol.ts`).
 //! The module has no imports; the host reads output from the exported `memory`.
 
+pub mod drums;
 pub mod dsp;
 pub mod engine;
 pub mod envelope;
@@ -126,12 +127,38 @@ pub extern "C" fn mod_active() -> u32 {
     engine().map(|e| e.mod_active() as u32).unwrap_or(0)
 }
 
-/// Pointer to 39 f32: the current effective value of params 0..38 (knob value plus
-/// modulation from the most recent note, clamped). Untargeted params hold their knob value.
+/// Pointer to `PARAM_COUNT` (164) f32, indexed by param ID: the current effective
+/// value of each param (knob value plus modulation from the most recent note,
+/// clamped). Params that aren't mod targets hold their knob value.
 #[no_mangle]
 pub extern "C" fn mod_values_ptr() -> *const f32 {
+    static NO_VALUES: [f32; params::PARAM_COUNT as usize] = [0.0; params::PARAM_COUNT as usize];
     match engine() {
         Some(e) => e.mod_values.as_ptr(),
-        None => SILENCE.as_ptr(),
+        None => NO_VALUES.as_ptr(),
+    }
+}
+
+/// Clear the drum pattern and set its length in steps.
+#[no_mangle]
+pub extern "C" fn drum_pattern_clear(steps: u32) {
+    if let Some(e) = engine() {
+        e.drums.pattern_clear(steps);
+    }
+}
+
+/// Add a drum hit: step, voice (DRUM_VOICES index), velocity 0..1, accent 0/1.
+#[no_mangle]
+pub extern "C" fn drum_pattern_add(step: u32, voice: u32, velocity: f32, accent: u32) {
+    if let Some(e) = engine() {
+        e.drums.pattern_add(step, voice, velocity, accent != 0);
+    }
+}
+
+/// Audition one drum voice now, regardless of transport.
+#[no_mangle]
+pub extern "C" fn drum_trigger(voice: u32, velocity: f32) {
+    if let Some(e) = engine() {
+        e.drum_trigger(voice as usize, velocity);
     }
 }

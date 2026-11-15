@@ -1,6 +1,6 @@
 // Main-thread handle to the audio engine. Owns the AudioContext and the
 // AudioWorkletNode; never touches WASM directly (the worklet does).
-import type { FromWorklet, Pattern, ToWorklet } from "./protocol"
+import type { DrumPattern, FromWorklet, Pattern, ToWorklet } from "./protocol"
 // `?worker&url` makes Vite compile worklet.ts (and its imports) to a standalone
 // JS module and give us its URL: in dev a transformed module, in build a
 // hashed file in dist/assets. AudioWorklet.addModule needs exactly that.
@@ -16,7 +16,7 @@ export type ToWorkletMod = Extract<ToWorklet, { type: "modwheel" }>
 /**
  * Worklet -> main thread, ~30 Hz while any mod route is live, plus one final
  * message with `active: false` when the last route goes away.
- * `values[id]` is the current effective value of param `id` (0..38) in its
+ * `values[id]` is the current effective value of param `id` (0..163) in its
  * engineering units: knob value plus modulation from the most recently
  * triggered note, clamped to the target range. Untargeted params hold their knob value.
  */
@@ -127,7 +127,7 @@ export class EngineClient {
 
   /**
    * Subscribe to modulated param values (~30 Hz while any mod route is live).
-   * `values[id]` is param `id`'s effective value (ids 0..38); `null` means no
+   * `values[id]` is param `id`'s effective value (ids 0..163); `null` means no
    * route is live any more. Returns an unsubscribe function.
    */
   onMod(cb: ModListener): () => void {
@@ -140,6 +140,16 @@ export class EngineClient {
   /** Mod wheel position, 0..1 (a modulation source). */
   setModwheel(value: number) {
     this.post({ type: "modwheel", value })
+  }
+
+  /** Replace the 808 track's pattern. Kit params go through `setParams` (drums.ts kitToParams). */
+  setDrumPattern(pattern: DrumPattern) {
+    this.post({ type: "drumPattern", pattern })
+  }
+
+  /** Audition one drum voice now, regardless of transport. `voice` = index into DRUM_VOICES. */
+  triggerDrum(voice: number, velocity = 0.8) {
+    this.post({ type: "drumTrigger", voice, velocity })
   }
 
   /** Tear down the node and context. The client can be started again afterwards. */

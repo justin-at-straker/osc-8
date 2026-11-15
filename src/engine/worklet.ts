@@ -2,7 +2,7 @@
 // Runs in AudioWorkletGlobalScope: no DOM, no fetch. The main thread sends the
 // compiled bytes in an "init" message. Keep process() allocation-free.
 import type { FromWorklet, ToWorklet } from "./protocol"
-import type { FromWorkletMod, ToWorkletMod } from "./client"
+import { DRUM_ORDER } from "./drum-order"
 
 // AudioWorkletGlobalScope declarations (not in lib.dom).
 declare const sampleRate: number
@@ -28,14 +28,19 @@ type Exports = {
   set_modwheel(value: number): void
   mod_active(): number
   mod_values_ptr(): number
+  drum_pattern_clear(steps: number): void
+  drum_pattern_add(step: number, voice: number, velocity: number, accent: number): void
+  drum_trigger(voice: number, velocity: number): void
 }
 
-type In = ToWorklet | ToWorkletMod
-type Out = FromWorklet | FromWorkletMod
+const DRUM_INDEX: Record<string, number> = Object.fromEntries(DRUM_ORDER.map((v, i) => [v, i]))
+
+type In = ToWorklet
+type Out = FromWorklet
 
 const BLOCK = 128
-/** Params 0..38 have readback values (see `mod_values_ptr`). */
-const MOD_VALUES = 39
+/** Readback values for every param ID 0..163 (see `mod_values_ptr`). */
+const MOD_VALUES = 164
 /** Modulation readback rate. */
 const MOD_HZ = 30
 
@@ -128,6 +133,16 @@ class Osc8Processor extends AudioWorkletProcessor {
         break
       case "modwheel":
         wasm.set_modwheel(msg.value)
+        break
+      case "drumPattern":
+        wasm.drum_pattern_clear(msg.pattern.steps)
+        for (const h of msg.pattern.hits) {
+          const voice = DRUM_INDEX[h.voice]
+          if (voice !== undefined) wasm.drum_pattern_add(h.step, voice, h.velocity, h.accent ? 1 : 0)
+        }
+        break
+      case "drumTrigger":
+        wasm.drum_trigger(msg.voice, msg.velocity)
         break
       case "init":
         break

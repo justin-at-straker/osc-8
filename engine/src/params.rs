@@ -115,5 +115,62 @@ pub const MOD_TARGET: u32 = 1; // param ID, -1 = none
 pub const MOD_AMOUNT: u32 = 2; // -1..1
 pub const MOD_AUX: u32 = 3; // MOD_SOURCES index; scales amount by the aux source (0..1)
 
-/// Number of parameter IDs this engine understands.
-pub const PARAM_COUNT: u32 = MOD_BASE + MOD_SLOTS * MOD_STRIDE; // 131
+/// End of the modulation block (exclusive).
+pub const MOD_END: u32 = MOD_BASE + MOD_SLOTS * MOD_STRIDE; // 131
+
+// Sound sources (IDs 131..163).
+
+/// Osc A extras: 0/1 gate (level 2 is the raw level).
+pub const OSC_A_ENABLED: u32 = 131;
+/// Per-oscillator voice params: offsets from `OSC_A_VOICE` / `OSC_B_VOICE`.
+pub const OSC_A_VOICE: u32 = 132;
+pub const OSC_B_VOICE: u32 = 147;
+pub const VOICE_PAN: u32 = 0; // -1..1
+pub const VOICE_UNISON: u32 = 1; // 1..16
+pub const VOICE_DETUNE: u32 = 2; // 0..1 (1 = +-1 semitone at the outer voices)
+pub const VOICE_BLEND: u32 = 3; // 0 center only .. 1 sides equal
+pub const VOICE_SPREAD: u32 = 4; // 0 mono .. 1 full width
+pub const VOICE_PHASE: u32 = 5; // 0..1 start phase
+pub const VOICE_RANDOM_PHASE: u32 = 6; // 0..1
+pub const VOICE_TO_FILTER: u32 = 7; // 0/1
+pub const OSC_A_PAN: u32 = OSC_A_VOICE + VOICE_PAN;
+pub const OSC_A_UNISON: u32 = OSC_A_VOICE + VOICE_UNISON;
+pub const OSC_A_DETUNE: u32 = OSC_A_VOICE + VOICE_DETUNE;
+pub const OSC_A_BLEND: u32 = OSC_A_VOICE + VOICE_BLEND;
+pub const OSC_A_SPREAD: u32 = OSC_A_VOICE + VOICE_SPREAD;
+pub const OSC_A_PHASE: u32 = OSC_A_VOICE + VOICE_PHASE;
+pub const OSC_A_RANDOM_PHASE: u32 = OSC_A_VOICE + VOICE_RANDOM_PHASE;
+pub const OSC_A_TO_FILTER: u32 = OSC_A_VOICE + VOICE_TO_FILTER;
+
+pub const OSC_B_ENABLED: u32 = 140;
+pub const OSC_B_TABLE: u32 = 141;
+pub const OSC_B_POSITION: u32 = 142;
+pub const OSC_B_LEVEL: u32 = 143;
+pub const OSC_B_OCTAVE: u32 = 144;
+pub const OSC_B_SEMI: u32 = 145;
+pub const OSC_B_FINE: u32 = 146;
+pub const OSC_B_PAN: u32 = OSC_B_VOICE + VOICE_PAN;
+pub const OSC_B_UNISON: u32 = OSC_B_VOICE + VOICE_UNISON;
+pub const OSC_B_DETUNE: u32 = OSC_B_VOICE + VOICE_DETUNE;
+pub const OSC_B_BLEND: u32 = OSC_B_VOICE + VOICE_BLEND;
+pub const OSC_B_SPREAD: u32 = OSC_B_VOICE + VOICE_SPREAD;
+pub const OSC_B_PHASE: u32 = OSC_B_VOICE + VOICE_PHASE;
+pub const OSC_B_RANDOM_PHASE: u32 = OSC_B_VOICE + VOICE_RANDOM_PHASE;
+pub const OSC_B_TO_FILTER: u32 = OSC_B_VOICE + VOICE_TO_FILTER;
+// 155 unused.
+
+pub const SUB_ENABLED: u32 = 156;
+pub const SUB_LEVEL: u32 = 157;
+/// -2..0 octaves relative to osc A.
+pub const SUB_OCTAVE: u32 = 158;
+/// sine, triangle, square.
+pub const SUB_SHAPE: u32 = 159;
+
+pub const NOISE_ENABLED: u32 = 160;
+pub const NOISE_LEVEL: u32 = 161;
+/// 0 dark (brown-ish) .. 0.5 white .. 1 bright (blue-ish).
+pub const NOISE_COLOR: u32 = 162;
+pub const NOISE_TO_FILTER: u32 = 163;
+
+/// Number of parameter IDs this engine understands (max ID + 1).
+pub const PARAM_COUNT: u32 = 164;

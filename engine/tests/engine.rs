@@ -60,7 +60,8 @@ fn param_ids_match_params_ts() {
         assert_eq!(*id as usize, i);
     }
     assert_eq!(BASE_PARAM_COUNT as usize, ids.len());
-    assert_eq!(PARAM_COUNT, 131);
+    assert_eq!(MOD_END, 131);
+    assert_eq!(PARAM_COUNT, 164);
 }
 
 #[test]

@@ -132,12 +132,14 @@ pub struct Biquad {
 
 impl Default for Biquad {
     fn default() -> Self {
-        Self { b0: 1.0, b1: 0.0, b2: 0.0, a1: 0.0, a2: 0.0, z1: 0.0, z2: 0.0 }
+        Self::IDENTITY
     }
 }
 
 pub enum BiquadKind {
     Lowpass,
+    /// Constant 0 dB peak gain.
+    Bandpass,
     Highpass,
     Allpass,
     Peak(f32),
@@ -146,6 +148,9 @@ pub enum BiquadKind {
 }
 
 impl Biquad {
+    /// Passes the input through unchanged.
+    pub const IDENTITY: Self = Self { b0: 1.0, b1: 0.0, b2: 0.0, a1: 0.0, a2: 0.0, z1: 0.0, z2: 0.0 };
+
     pub fn new(kind: BiquadKind, hz: f32, q: f32, sample_rate: f32) -> Self {
         let mut b = Self::default();
         b.set(kind, hz, q, sample_rate);
@@ -159,6 +164,7 @@ impl Biquad {
         let alpha = sn / (2.0 * q as f64);
         let (b0, b1, b2, a0, a1, a2) = match kind {
             BiquadKind::Lowpass => ((1.0 - cs) / 2.0, 1.0 - cs, (1.0 - cs) / 2.0, 1.0 + alpha, -2.0 * cs, 1.0 - alpha),
+            BiquadKind::Bandpass => (alpha, 0.0, -alpha, 1.0 + alpha, -2.0 * cs, 1.0 - alpha),
             BiquadKind::Highpass => ((1.0 + cs) / 2.0, -(1.0 + cs), (1.0 + cs) / 2.0, 1.0 + alpha, -2.0 * cs, 1.0 - alpha),
             BiquadKind::Allpass => (1.0 - alpha, -2.0 * cs, 1.0 + alpha, 1.0 + alpha, -2.0 * cs, 1.0 - alpha),
             BiquadKind::Peak(db) => {

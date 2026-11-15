@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react"
 import { getState, setAudio, setStep, subscribe, type State } from "@/state/store"
 import type { EngineClient } from "./client"
+import { kitToParams } from "./drums"
 import { patchToParams } from "./params"
 
 /**
@@ -14,9 +15,9 @@ export function connectEngine(client: EngineClient): () => void {
   // Last value sent per param id.
   const sent = new Map<number, number>()
 
-  const sendParams = (all: boolean) => {
+  const diff = (pairs: [number, number][], all: boolean) => {
     const changed: [number, number][] = []
-    for (const [id, value] of patchToParams(state.patch)) {
+    for (const [id, value] of pairs) {
       if (all || sent.get(id) !== value) {
         sent.set(id, value)
         changed.push([id, value])
@@ -24,9 +25,13 @@ export function connectEngine(client: EngineClient): () => void {
     }
     client.setParams(changed)
   }
+  const sendParams = (all: boolean) => diff(patchToParams(state.patch), all)
+  const sendKit = (all: boolean) => diff(kitToParams(state.drums.kit), all)
 
   sendParams(true)
+  sendKit(true)
   client.setPattern(state.pattern)
+  client.setDrumPattern(state.drums.pattern)
   client.setTransport(state.transport.playing, state.transport.bpm)
 
   const unsubscribe = subscribe(() => {
@@ -34,6 +39,8 @@ export function connectEngine(client: EngineClient): () => void {
     state = getState()
     if (state.patch !== prev.patch) sendParams(false)
     if (state.pattern !== prev.pattern) client.setPattern(state.pattern)
+    if (state.drums.kit !== prev.drums.kit) sendKit(false)
+    if (state.drums.pattern !== prev.drums.pattern) client.setDrumPattern(state.drums.pattern)
     if (state.transport.playing !== prev.transport.playing || state.transport.bpm !== prev.transport.bpm) {
       client.setTransport(state.transport.playing, state.transport.bpm)
     }
@@ -59,7 +66,7 @@ function setModValues(values: Float32Array | null) {
   for (const l of modListeners) l()
 }
 
-/** Latest effective values of params 0..38 (indexed by param id), or null when no mod route is live. */
+/** Latest effective values of params 0..163 (indexed by param id), or null when no mod route is live. */
 export function getModValues(): Float32Array | null {
   return modValues
 }

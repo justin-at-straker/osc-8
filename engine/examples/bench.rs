@@ -8,7 +8,24 @@ const SR: f32 = 48000.0;
 const BLOCKS: usize = 20_000; // ~53 s of audio
 
 fn bench(label: &str, fx: &[(u32, f32)]) -> f64 {
+    bench_with(label, fx, false)
+}
+
+/// `drums`: every one of the 11 drum voices hit on every 16th at 140 bpm.
+fn bench_with(label: &str, fx: &[(u32, f32)], drums: bool) -> f64 {
     let mut e = Engine::new(SR);
+    if drums {
+        e.drums.pattern_clear(16);
+        for s in 0..16 {
+            for v in 0..osc8_engine::drums::DRUM_VOICES as u32 {
+                e.drums.pattern_add(s, v, 1.0, s % 4 == 0);
+            }
+        }
+        for v in 0..osc8_engine::drums::DRUM_VOICES as u32 {
+            e.set_param(1000 + v * 8 + 2, 1.0); // longest decays
+        }
+        e.set_transport(true, 140.0);
+    }
     e.set_param(OSC_A_POSITION, 0.67);
     e.set_param(ENV1_SUSTAIN, 1.0);
     for &(id, v) in fx {
@@ -68,4 +85,17 @@ fn main() {
     bench("16 routes", &routes);
     let all_mod: Vec<_> = [&all[..], &routes].concat();
     bench("16 routes+fx", &all_mod);
+
+    // Worst case: both oscs at 16 unison, sub, noise, all FX, 16 routes.
+    let big = [
+        (OSC_A_UNISON, 16.0), (OSC_A_DETUNE, 0.4), (OSC_A_SPREAD, 1.0),
+        (OSC_B_ENABLED, 1.0), (OSC_B_UNISON, 16.0), (OSC_B_DETUNE, 0.3), (OSC_B_SPREAD, 1.0), (OSC_B_POSITION, 0.4),
+        (SUB_ENABLED, 1.0), (NOISE_ENABLED, 1.0),
+    ];
+    bench("A 16 unison", &big[..3]);
+    bench("A+B 16 uni", &big[..8]);
+    let worst: Vec<_> = [&all_mod[..], &big].concat();
+    bench("WORST CASE", &worst);
+    bench_with("808 only", &[], true);
+    bench_with("WORST + 808", &worst, true);
 }

@@ -34,6 +34,8 @@ pub struct Sequencer {
     next_at: f64,
     held: [Held; MAX_HELD],
     held_len: usize,
+    /// Step boundaries fired since transport start.
+    ticks: u64,
 }
 
 impl Sequencer {
@@ -48,6 +50,7 @@ impl Sequencer {
             next_at: 0.0,
             held: [Held::default(); MAX_HELD],
             held_len: 0,
+            ticks: 0,
         }
     }
 
@@ -97,6 +100,7 @@ impl Sequencer {
             self.playing = true;
             self.current = -1;
             self.next_at = 0.0;
+            self.ticks = 0;
         } else if !playing && self.playing {
             self.playing = false;
             self.current = -1;
@@ -128,12 +132,18 @@ impl Sequencer {
         }
     }
 
-    /// Fire every due step boundary.
-    pub fn fire(&mut self, inst: &mut dyn Instrument) {
-        while self.playing && self.next_at <= 0.0 {
-            self.step_boundary(inst);
-            self.next_at += self.samples_per_step();
+    /// Fire the due step boundary (call again while `samples_until_event()` is `Some(0)`).
+    /// Returns the boundary's index counted from transport start (0, 1, 2, ...): the
+    /// 16th-note tick other tracks (the drum machine) schedule from.
+    pub fn fire(&mut self, inst: &mut dyn Instrument) -> Option<u64> {
+        if !(self.playing && self.next_at <= 0.0) {
+            return None;
         }
+        self.step_boundary(inst);
+        self.next_at += self.samples_per_step();
+        let tick = self.ticks;
+        self.ticks += 1;
+        Some(tick)
     }
 
     fn step_boundary(&mut self, inst: &mut dyn Instrument) {

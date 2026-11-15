@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
-import { getState, resetHistory, setPattern, setTransport } from "@/state/store"
+import { getState, resetHistory, setDrumPattern, setPattern, setTransport } from "@/state/store"
+import { DEMO_DRUMS } from "@/engine/drums"
 import { Hardware } from "@/components/ui/hardware"
 import { Toasts, notify } from "@/components/ui/toaster"
 import { DescribeField, KeySettings } from "@/ai"
@@ -14,6 +15,7 @@ connectLiveMod()
 // Start on a warm keys sound playing a familiar melody, with a clean undo history.
 loadPresetById(DEFAULT_PRESET_ID)
 setPattern(DEMO_PATTERN, "load")
+setDrumPattern(DEMO_DRUMS, "load")
 setTransport({ bpm: DEMO_BPM })
 resetHistory()
 
@@ -27,6 +29,7 @@ export function App() {
       },
       noteOn: (note, velocity) => client.noteOn(note, velocity),
       noteOff: (note) => client.noteOff(note),
+      triggerDrum: (voice, velocity) => client.triggerDrum(voice, velocity),
     }),
     []
   )

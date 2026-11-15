@@ -18,9 +18,9 @@ const SECTION_HINTS: Record<string, string> = {
   oscA: "Wavetable oscillator A. table: {kind:'builtin', name} where name is one of " +
     BUILTIN_TABLES.join(", ") +
     ". position 0..1 morphs through the table's frames. level 0..1. octave -4..4, semi -12..12 (integers), fine -100..100 cents.",
-  oscB: "Wavetable oscillator B (not audible in M1).",
-  sub: "Sub oscillator (not audible in M1).",
-  noise: "Noise source (not audible in M1).",
+  oscB: "Wavetable oscillator B, same controls as oscA (enable it with enabled:true). Layer it an octave up, a fifth (semi 7) or detuned (fine +-5..12) against A for width and richness.",
+  sub: "Sub oscillator: enabled, level, octave (-2..0, relative to oscA), shape sine|triangle|square. Adds weight under basses and leads; keep it sine for clean low end.",
+  noise: "Noise: enabled, level (keep 0.05-0.2 for air/breath, higher for risers), color 0 dark .. 0.5 white .. 1 bright, toFilter.",
   filter: "Filter. cutoff in Hz 20..20000 (log-ish: 200 dark, 1000 warm, 4000 open, 12000 bright). resonance 0..1 (0.7+ whistles). enabled toggles it. In M1 only lp24 is rendered.",
   env1: "Amp envelope. attack/decay/release in seconds 0..20, sustain 0..1.",
   env2: "Envelope 2: a mod source (0..1 per note), audible only through a mod route. Times in seconds.",
@@ -111,7 +111,7 @@ export function applySetPatch(input: unknown): SetPatchResult {
 }
 
 const SET_PATCH_DESCRIPTION = `Design a sound by editing the synth patch. Give only what you change; every object level is optional and merges onto the current patch (arrays and oscillator 'table' are replaced whole). All changes apply as one undo step. Units: Hz for cutoff, seconds for envelope times, 0..1 for levels/amounts, integers for octave/semi.
-AUDIBLE NOW: oscA (table, position, level, octave, semi, fine), filter (enabled, cutoff, resonance; rendered as lp24), env1 (amp), env2/env3/lfos via mod routes, the mod matrix, every fx section, master.volume. NOT YET AUDIBLE (saved for later): oscB, sub, noise, unison/detune/blend/spread/warp/pan/phase, filter types other than lp24, voicing.
+AUDIBLE NOW: oscA and oscB (table, position, level, tuning, pan, unison 1..16 with detune/blend/spread, phase/randomPhase, toFilter), sub, noise, filter (enabled, cutoff, resonance; rendered as lp24), env1 (amp), env2/env3/lfos via mod routes, the mod matrix, every fx section, master.volume. NOT YET AUDIBLE (saved for later): warp, filter types other than lp24, voicing.
 Always include a short descriptive 'name'. On { ok: false } read the error, fix the input and call again.`
 
 export function createPatchTools() {

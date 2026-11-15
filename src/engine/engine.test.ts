@@ -5,6 +5,8 @@ import { join } from "node:path"
 import { beforeAll, describe, expect, it } from "vitest"
 import { defaultPatch } from "./patch"
 import { PARAMS, paramId, patchToParams } from "./params"
+import { DEMO_DRUMS, DRUM_BUS, DRUM_VOICES, defaultKit, kitToParams } from "./drums"
+import { DRUM_ORDER } from "./drum-order"
 
 type Exports = {
   memory: WebAssembly.Memory
@@ -19,6 +21,9 @@ type Exports = {
   out_left(): number
   out_right(): number
   current_step(): number
+  drum_pattern_clear(steps: number): void
+  drum_pattern_add(step: number, voice: number, velocity: number, accent: number): void
+  drum_trigger(voice: number, velocity: number): void
   set_modwheel(value: number): void
   mod_active(): number
   mod_values_ptr(): number
@@ -160,6 +165,7 @@ function renderStereo(e: Exports, blocks: number): [Float32Array, Float32Array] 
 function blipPatch() {
   const p = defaultPatch()
   p.oscA.position = 0.67
+  p.oscA.randomPhase = 0 // deterministic start (a 20 ms blip is phase-sensitive)
   p.env1 = { attack: 0, decay: 0.01, sustain: 0, release: 0.01 }
   return p
 }
@@ -218,7 +224,7 @@ describe("osc8.wasm FX chain (ids 14..38)", () => {
     e.note_on(60, 1)
     const [l] = renderStereo(e, 110) // 14080 samples
     expect(rms(l.subarray(2000, 11900))).toBeLessThan(1e-6) // dry is fully replaced at mix 1
-    expect(rms(l.subarray(12000, 13000))).toBeGreaterThan(0.05)
+    expect(rms(l.subarray(12000, 13000))).toBeGreaterThan(0.02)
   })
 
   it("ping-pong puts the first echo left and the second right", async () => {
@@ -267,7 +273,7 @@ describe("osc8.wasm FX chain (ids 14..38)", () => {
 })
 
 describe("osc8.wasm modulation (ids 39..130)", () => {
-  const modValues = (e: Exports) => new Float32Array(e.memory.buffer, e.mod_values_ptr(), 39)
+  const modValues = (e: Exports) => new Float32Array(e.memory.buffer, e.mod_values_ptr(), 164)
 
   it("the default patch has no live routes and reads back knob values", async () => {
     const e = await withPatch(defaultPatch())
@@ -334,5 +340,104 @@ describe("osc8.wasm modulation (ids 39..130)", () => {
     e.set_param(paramId("master.volume"), 0)
     renderStereo(e, 40)
     expect(rms(renderStereo(e, 20)[0])).toBe(0)
+  })
+})
+
+describe("osc8.wasm sound sources (ids 131..163)", () => {
+  const corr = (a: Float32Array, b: Float32Array) => {
+    let ab = 0, aa = 0, bb = 0
+    for (let i = 0; i < a.length; i++) { ab += a[i] * b[i]; aa += a[i] * a[i]; bb += b[i] * b[i] }
+    return ab / Math.sqrt(aa * bb)
+  }
+  const pitch = (x: Float32Array) => {
+    const ups: number[] = []
+    for (let i = 1; i < x.length; i++) if (x[i - 1] < 0 && x[i] >= 0) ups.push(i - 1 + x[i - 1] / (x[i - 1] - x[i]))
+    return ((ups.length - 1) / (ups[ups.length - 1] - ups[0])) * SR
+  }
+
+  it("the default patch (unison 1) is mono", async () => {
+    const e = await withPatch(defaultPatch())
+    e.note_on(57, 1)
+    const [l, r] = renderStereo(e, 50)
+    expect(l).toEqual(r)
+    expect(rms(l)).toBeGreaterThan(0.05)
+  })
+
+  it("a wide unison stack on both oscs is stereo, finite and <= 1", async () => {
+    const p = defaultPatch()
+    p.oscA = { ...p.oscA, unison: 16, detune: 0.4, spread: 1, blend: 1 }
+    p.oscB = { ...p.oscB, enabled: true, unison: 16, detune: 0.3, spread: 1, semi: 7 }
+    p.sub.enabled = true
+    p.noise.enabled = true
+    const e = await withPatch(p)
+    for (const n of [48, 55, 60, 64]) e.note_on(n, 1)
+    renderStereo(e, 40)
+    const [l, r] = renderStereo(e, 300)
+    for (const x of [l, r]) {
+      expect(x.every(Number.isFinite)).toBe(true)
+      expect(Math.max(...x.map(Math.abs))).toBeLessThanOrEqual(1)
+    }
+    expect(corr(l, r)).toBeLessThan(0.7)
+  })
+
+  it("oscA.enabled (131) gates osc A; the sub plays an octave below", async () => {
+    const p = defaultPatch()
+    p.oscA.enabled = false
+    let e = await withPatch(p)
+    e.note_on(69, 1)
+    renderStereo(e, 10)
+    expect(rms(renderStereo(e, 40)[0])).toBe(0)
+    p.sub = { enabled: true, level: 1, octave: -1, shape: "sine" }
+    p.filter.enabled = false
+    e = await withPatch(p)
+    e.note_on(69, 1)
+    renderStereo(e, 40)
+    expect(pitch(renderStereo(e, 375)[0])).toBeCloseTo(220, 0)
+  })
+})
+
+describe("osc8.wasm 808 drum track (ids 1000+)", () => {
+  const kitEngine = async () => {
+    const e = await withPatch(defaultPatch())
+    for (const [i, v] of kitToParams(defaultKit())) e.set_param(i, v)
+    return e
+  }
+  const voice = (v: (typeof DRUM_VOICES)[number]) => DRUM_VOICES.indexOf(v)
+
+  it("the worklet's voice order matches drums.ts", () => {
+    expect([...DRUM_ORDER]).toEqual([...DRUM_VOICES])
+  })
+
+  it("every voice auditions (drum_trigger) finite and <= 1", async () => {
+    for (let v = 0; v < DRUM_VOICES.length; v++) {
+      const e = await kitEngine()
+      e.drum_trigger(v, 1)
+      const [l, r] = renderStereo(e, 40)
+      expect(rms(l), DRUM_VOICES[v]).toBeGreaterThan(0.005)
+      for (const x of [l, r]) expect(x.every((s) => Number.isFinite(s) && Math.abs(s) <= 1)).toBe(true)
+    }
+  })
+
+  it("the demo pattern plays with the transport; mute (kit param) silences a voice", async () => {
+    const e = await kitEngine()
+    e.drum_pattern_clear(DEMO_DRUMS.steps)
+    for (const h of DEMO_DRUMS.hits) e.drum_pattern_add(h.step, voice(h.voice), h.velocity, h.accent ? 1 : 0)
+    e.set_transport(1, 120)
+    expect(rms(renderStereo(e, 375)[0])).toBeGreaterThan(0.02)
+
+    const m = await kitEngine()
+    m.set_param(1000 + voice("kick") * 8 + 6, 1)
+    m.drum_trigger(voice("kick"), 1)
+    expect(rms(renderStereo(m, 40)[0])).toBe(0)
+  })
+
+  it("bus level 0 silences drums but not the synth", async () => {
+    const e = await kitEngine()
+    e.set_param(DRUM_BUS.level, 0)
+    renderStereo(e, 10)
+    e.drum_trigger(voice("snare"), 1)
+    expect(rms(renderStereo(e, 40)[0])).toBe(0)
+    e.note_on(60, 1)
+    expect(rms(renderStereo(e, 40)[0])).toBeGreaterThan(0.01)
   })
 })

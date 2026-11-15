@@ -89,6 +89,32 @@ impl Wavetable {
         a + (b - a) * ff
     }
 
+    /// Data offsets of the two frames around `position` at mip `level`, and the
+    /// blend between them. Pair with [`Wavetable::read`] to share this work across
+    /// unison voices.
+    #[inline]
+    pub fn frame_offsets(&self, level: usize, position: f32) -> (usize, usize, f32) {
+        let fpos = position.clamp(0.0, 1.0) * (self.frames - 1) as f32;
+        let f0 = (fpos as usize).min(self.frames - 1);
+        let f1 = (f0 + 1).min(self.frames - 1);
+        let base = level * self.frames;
+        ((base + f0) * STRIDE, (base + f1) * STRIDE, fpos - f0 as f32)
+    }
+
+    /// Sample at `phase` (0..1) between the frames from [`Wavetable::frame_offsets`].
+    #[inline(always)]
+    pub fn read(&self, b0: usize, b1: usize, ff: f32, phase: f32) -> f32 {
+        let p = phase * TABLE_SIZE as f32;
+        let i = (p as usize).min(TABLE_SIZE - 1);
+        let fr = p - i as f32;
+        // Offsets come from frame_offsets and i < TABLE_SIZE, so i + 1 stays inside the frame (guard sample).
+        let d = &self.data[b0 + i..b0 + i + 2];
+        let e = &self.data[b1 + i..b1 + i + 2];
+        let a = d[0] + (d[1] - d[0]) * fr;
+        let b = e[0] + (e[1] - e[0]) * fr;
+        a + (b - a) * ff
+    }
+
     /// Raw frame access for tests and visualisation.
     pub fn frame(&self, level: usize, frame: usize) -> &[f32] {
         let base = (level * self.frames + frame) * STRIDE;

@@ -35,7 +35,7 @@ export type FromWorklet =
   | { type: "error"; message: string }
   /** Current sequencer step, sent when it changes. -1 when stopped. */
   | { type: "step"; step: number }
-  /** ~30 Hz while any mod route is live, then once with active false. values[paramId] for IDs 0..38, engineering units. */
+  /** ~30 Hz while any mod route is live, then once with active false. values[paramId] for every param ID (length = PARAM_COUNT, 164), engineering units. */
   | { type: "mod"; active: boolean; values: Float32Array }
 
 /*
