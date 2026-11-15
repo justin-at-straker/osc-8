@@ -2,7 +2,7 @@
 // The numeric IDs MUST match engine/src/params.rs exactly. Append only; never renumber.
 // Values are sent in the same engineering units as patch.ts.
 import type { Patch } from "./patch"
-import { BUILTIN_TABLES, DELAY_TIMES, DIST_TYPES } from "./patch"
+import { BUILTIN_TABLES, DELAY_TIMES, DIST_TYPES, LFO_SHAPES, Lfo, MOD_SOURCES } from "./patch"
 
 export const PARAMS = [
   // id, key, getter. M1 wires these; later milestones append.
@@ -51,7 +51,85 @@ export const PARAMS = [
 
 export type ParamKey = (typeof PARAMS)[number][1]
 
+// ---- Modulation (IDs 39..130) ----
+// Generated rather than listed: 4 LFOs, env2/env3, and 16 mod-matrix slots.
+
+const LFO_DIVISIONS = Lfo.shape.syncDivision.options
+export const LFO_BASE = 39 // + lfo*5: shape, rate, sync, division, oneShot
+export const ENV_BASE = 59 // env2: 59..62, env3: 63..66 (attack, decay, sustain, release)
+export const MOD_BASE = 67 // + slot*4: source, target, amount, aux
+export const MOD_SLOTS = 16
+
+type Getter = (p: Patch) => number
+const MOD_PARAMS: [number, string, Getter][] = []
+for (let i = 0; i < 4; i++) {
+  const b = LFO_BASE + i * 5
+  MOD_PARAMS.push(
+    [b, `lfos.${i}.shape`, (p) => LFO_SHAPES.indexOf(p.lfos[i].shape)],
+    [b + 1, `lfos.${i}.rate`, (p) => p.lfos[i].rate],
+    [b + 2, `lfos.${i}.sync`, (p) => (p.lfos[i].sync ? 1 : 0)],
+    [b + 3, `lfos.${i}.syncDivision`, (p) => LFO_DIVISIONS.indexOf(p.lfos[i].syncDivision)],
+    [b + 4, `lfos.${i}.oneShot`, (p) => (p.lfos[i].oneShot ? 1 : 0)]
+  )
+}
+for (const [j, env] of (["env2", "env3"] as const).entries()) {
+  const b = ENV_BASE + j * 4
+  MOD_PARAMS.push(
+    [b, `${env}.attack`, (p) => p[env].attack],
+    [b + 1, `${env}.decay`, (p) => p[env].decay],
+    [b + 2, `${env}.sustain`, (p) => p[env].sustain],
+    [b + 3, `${env}.release`, (p) => p[env].release]
+  )
+}
+
+/**
+ * Parameters a mod route may target, with the range the route's `amount`
+ * spans: amount 1 sweeps the full range up from the knob's value, -1 the full
+ * range down (Serum semantics). "log" ranges modulate in log space (cutoff).
+ * The engine clamps the sum to [min, max].
+ */
+export const MOD_TARGETS: Record<string, { min: number; max: number; log?: boolean }> = {
+  "oscA.position": { min: 0, max: 1 },
+  "oscA.level": { min: 0, max: 1 },
+  "oscA.semi": { min: -24, max: 24 }, // pitch modulation in semitones (vibrato, risers)
+  "oscA.fine": { min: -100, max: 100 },
+  "filter.cutoff": { min: 20, max: 20000, log: true },
+  "filter.resonance": { min: 0, max: 1 },
+  "master.volume": { min: 0, max: 1 },
+  "fx.distortion.drive": { min: 0, max: 1 },
+  "fx.distortion.mix": { min: 0, max: 1 },
+  "fx.chorus.mix": { min: 0, max: 1 },
+  "fx.delay.mix": { min: 0, max: 1 },
+  "fx.delay.feedback": { min: 0, max: 1 },
+  "fx.reverb.mix": { min: 0, max: 1 },
+  "fx.reverb.size": { min: 0, max: 1 },
+  "fx.ott.depth": { min: 0, max: 1 },
+  "fx.eq.low": { min: -12, max: 12 },
+  "fx.eq.mid": { min: -12, max: 12 },
+  "fx.eq.high": { min: -12, max: 12 },
+}
+
+/** Param ID for a key, e.g. "filter.cutoff" -> 6. -1 if unknown. */
+export function paramId(key: string): number {
+  return PARAMS.find(([, k]) => k === key)?.[0] ?? -1
+}
+
+for (let s = 0; s < MOD_SLOTS; s++) {
+  const b = MOD_BASE + s * 4
+  const route = (p: Patch) => p.mod[s]
+  // An empty slot or unknown target sends source 0 ("none") / target -1, which the engine ignores.
+  MOD_PARAMS.push(
+    [b, `mod.${s}.source`, (p) => (route(p) && MOD_TARGETS[route(p).target] ? MOD_SOURCES.indexOf(route(p).source) : 0)],
+    [b + 1, `mod.${s}.target`, (p) => (route(p) ? paramId(route(p).target) : -1)],
+    [b + 2, `mod.${s}.amount`, (p) => route(p)?.amount ?? 0],
+    [b + 3, `mod.${s}.aux`, (p) => (route(p) ? MOD_SOURCES.indexOf(route(p).aux) : 0)]
+  )
+}
+
 /** Every (id, value) pair for a patch, for a full sync to the engine. */
 export function patchToParams(p: Patch): [number, number][] {
-  return PARAMS.map(([id, , get]) => [id, get(p)])
+  return [...PARAMS.map(([id, , get]): [number, number] => [id, get(p)]), ...MOD_PARAMS.map(([id, , get]): [number, number] => [id, get(p)])]
 }
+
+/** Keys of every param the engine renders, including modulation. */
+export const ALL_PARAM_KEYS: readonly string[] = [...PARAMS.map(([, k]) => k), ...MOD_PARAMS.map(([, k]) => k)]
