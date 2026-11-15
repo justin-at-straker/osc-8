@@ -83,7 +83,7 @@ fn ids_match_params_ts() {
     for (id, n) in expect {
         assert_eq!(id, n);
     }
-    assert_eq!(PARAM_COUNT, 173);
+    assert_eq!(PARAM_COUNT, 175);
 }
 
 #[test]

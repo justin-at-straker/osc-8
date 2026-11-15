@@ -1,6 +1,6 @@
 import * as React from "react"
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@ui-sdk/react/tabs"
-import { BUILTIN_TABLES, defaultPatch } from "@/engine/patch"
+import { BUILTIN_TABLES, defaultPatch, FILTER_TYPES } from "@/engine/patch"
 import { formatColor, formatPan, LOG, power } from "./taper"
 import { ParamDial, ParamKnob, ParamSlide, ParamStepper, ParamSwitch } from "./controls"
 import { usePatchValue, writePatchValue } from "./use-patch"
@@ -150,6 +150,30 @@ export type SynthPage = "osc" | "layers" | "filter"
  * oscillators and the filter, the knobs turned most; SUB/AMP holds the sub,
  * noise and amp envelope. Master volume lives in the transport strip.
  */
+const FILTER_LABELS: Record<(typeof FILTER_TYPES)[number], string> = {
+  lp12: "LP12",
+  lp24: "LP24",
+  hp12: "HP12",
+  hp24: "HP24",
+  bp12: "BP12",
+  bp24: "BP24",
+  notch: "Notch",
+  comb: "Comb",
+}
+
+function FilterTypeDial() {
+  const type = usePatchValue<string>("filter.type")
+  return (
+    <ParamDial
+      param="filter.type"
+      label="Filter type"
+      value={type}
+      options={FILTER_TYPES.map((t) => ({ value: t, label: FILTER_LABELS[t] }))}
+      onChange={(next) => writePatchValue("filter.type", next)}
+    />
+  )
+}
+
 const GLIDE_MODES = ["Off", "Always", "Legato"] as const
 type GlideMode = (typeof GLIDE_MODES)[number]
 
@@ -215,12 +239,14 @@ export function SynthPanel() {
             <ParamKnob param="env1.decay" label="Amp decay" legend="Decay" min={0} max={20} step={0.001} taper={power(4)} format={seconds} color="green" resetValue={init.env1.decay} />
             <ParamKnob param="env1.sustain" label="Amp sustain" legend="Sustain" {...unit} color="green" resetValue={init.env1.sustain} />
             <ParamKnob param="env1.release" label="Amp release" legend="Release" min={0} max={20} step={0.001} taper={power(4)} format={seconds} color="green" resetValue={init.env1.release} />
+            <ParamSlide param="env1.attackCurve" label="Amp attack curve" options={["linear", "analog"]} />
           </Module>
         </div>
       </TabsPanel>
       <TabsPanel value="filter" keepMounted data-osc-subpanel>
         <div data-osc-panel data-osc-synth-filter>
           <Module title="Filter" power={{ param: "filter.enabled", label: "Filter enabled" }}>
+            <FilterTypeDial />
             <ParamKnob param="filter.cutoff" label="Filter cutoff" legend="Cutoff" min={20} max={20000} step={1} taper={LOG} format={hertz} color="orange" resetValue={init.filter.cutoff} />
             <ParamKnob param="filter.resonance" label="Filter resonance" legend="Res" {...unit} resetValue={init.filter.resonance} />
             <ParamKnob param="filter.drive" label="Filter drive" legend="Drive" {...unit} color="orange" resetValue={init.filter.drive} />

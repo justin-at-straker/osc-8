@@ -20,7 +20,7 @@
 //!
 //! Master volume is not applied here: the engine applies it after the FX chain.
 
-use crate::dsp::Smoother;
+use crate::dsp::{DelayLine, Smoother};
 use crate::envelope::{Adsr, EnvParams, Envelope};
 use crate::instrument::Instrument;
 use crate::modulation::{apply, rand01, GlobalMod, ModMatrix, ModVoice, TARGET_SLOTS};
@@ -71,7 +71,21 @@ const C_GAIN_N: usize = 11;
 const C_COLOR: usize = 12;
 const C_TOF_N: usize = 13;
 const C_DRIVE: usize = 14;
-const N_CTL: usize = 15;
+/// Comb filter delay, samples (sample rate / cutoff).
+const C_COMB: usize = 15;
+const N_CTL: usize = 16;
+
+/// Filter types (FILTER_TYPES order in patch.ts).
+const LP12: usize = 0;
+const LP24: usize = 1;
+const HP12: usize = 2;
+const HP24: usize = 3;
+const BP12: usize = 4;
+const BP24: usize = 5;
+const NOTCH: usize = 6;
+const COMB: usize = 7;
+/// Lowest comb frequency, Hz (sets the comb buffers' length).
+const COMB_MIN_HZ: f32 = 20.0;
 
 #[derive(Clone, Copy, Default)]
 struct SvfCoefs {
@@ -97,14 +111,37 @@ struct Svf {
 }
 
 impl Svf {
+    /// One step: (band-pass, low-pass). High-pass is v0 - k v1 - v2 (Simper, SvfLinearTrapOptimised2).
     #[inline]
-    fn lowpass(&mut self, c: &SvfCoefs, v0: f32) -> f32 {
+    fn tick(&mut self, c: &SvfCoefs, v0: f32) -> (f32, f32) {
         let v3 = v0 - self.ic2;
         let v1 = c.a1 * self.ic1 + c.a2 * v3;
         let v2 = self.ic2 + c.a2 * self.ic1 + c.a3 * v3;
         self.ic1 = 2.0 * v1 - self.ic1;
         self.ic2 = 2.0 * v2 - self.ic2;
-        v2
+        (v1, v2)
+    }
+
+    #[inline]
+    fn lowpass(&mut self, c: &SvfCoefs, v0: f32) -> f32 {
+        self.tick(c, v0).1
+    }
+
+    #[inline]
+    fn highpass(&mut self, c: &SvfCoefs, k: f32, v0: f32) -> f32 {
+        let (v1, v2) = self.tick(c, v0);
+        v0 - k * v1 - v2
+    }
+
+    /// Band-pass normalized to unity gain at the center.
+    #[inline]
+    fn bandpass(&mut self, c: &SvfCoefs, k: f32, v0: f32) -> f32 {
+        k * self.tick(c, v0).0
+    }
+
+    #[inline]
+    fn notch(&mut self, c: &SvfCoefs, k: f32, v0: f32) -> f32 {
+        v0 - k * self.tick(c, v0).0
     }
 
     /// Soft-limit the band-pass state: resonance grows warmer and rounder
@@ -170,6 +207,8 @@ fn drive_sat(x: f32, d: f32, prev: &mut (f32, f32)) -> f32 {
 struct UniOsc {
     phase: [f32; MAX_UNISON],
     inc: [f32; MAX_UNISON],
+    /// Per-sample increment change, so pitch slides across the control tick instead of stepping.
+    dinc: [f32; MAX_UNISON],
     gl: [f32; MAX_UNISON],
     gr: [f32; MAX_UNISON],
     dgl: [f32; MAX_UNISON],
@@ -190,6 +229,7 @@ impl UniOsc {
     const IDLE: Self = Self {
         phase: [0.0; MAX_UNISON],
         inc: [0.0; MAX_UNISON],
+        dinc: [0.0; MAX_UNISON],
         gl: [0.0; MAX_UNISON],
         gr: [0.0; MAX_UNISON],
         dgl: [0.0; MAX_UNISON],
@@ -205,6 +245,7 @@ impl UniOsc {
     /// Jump straight to `t` (fresh voice).
     fn set(&mut self, t: &OscTarget) {
         self.inc = t.inc;
+        self.dinc = [0.0; MAX_UNISON];
         self.gl = t.gl;
         self.gr = t.gr;
         self.dgl = [0.0; MAX_UNISON];
@@ -219,9 +260,10 @@ impl UniOsc {
     /// Ramp toward `t` over the next control tick.
     fn ramp(&mut self, t: &OscTarget) {
         for u in self.n_proc..t.n {
-            // Voices joining the stack fade in from silence.
+            // Voices joining the stack fade in from silence, starting at their pitch.
             self.gl[u] = 0.0;
             self.gr[u] = 0.0;
+            self.inc[u] = t.inc[u];
         }
         let n_proc = self.n_proc.max(t.n);
         let k = 1.0 / CONTROL as f32;
@@ -229,7 +271,10 @@ impl UniOsc {
             self.dgl[u] = (t.gl[u] - self.gl[u]) * k;
             self.dgr[u] = (t.gr[u] - self.gr[u]) * k;
         }
-        self.inc = t.inc;
+        for u in 0..n_proc {
+            // Voices leaving the stack hold their pitch while they fade out.
+            self.dinc[u] = if u < t.n { (t.inc[u] - self.inc[u]) * k } else { 0.0 };
+        }
         // After this tick, voices beyond t.n have faded to 0 and can be dropped.
         self.n_proc = n_proc;
         self.n = t.n;
@@ -306,6 +351,7 @@ struct Voice {
     b: UniOsc,
     sub_phase: f32,
     sub_inc: f32,
+    sub_dinc: f32,
     sub_mip: usize,
     noise: Noise,
     /// Filter drive anti-aliasing history per channel: (x, u) of the last sample.
@@ -323,7 +369,7 @@ impl Voice {
             wander_to: [0.0; 2],
             wander_ticks: [0; 2],
             env_var: [0.0; 3],
-            envp: EnvParams { attack_inc: 1.0, decay_coef: 0.0, sustain: 0.0, release_coef: 0.0 },
+            envp: EnvParams { attack_inc: 1.0, attack_coef: 0.0, decay_coef: 0.0, sustain: 0.0, release_coef: 0.0 },
             velocity: 0.0,
             gate: false,
             env: Envelope::IDLE,
@@ -337,6 +383,7 @@ impl Voice {
             b: UniOsc::IDLE,
             sub_phase: 0.0,
             sub_inc: 0.0,
+            sub_dinc: 0.0,
             sub_mip: 0,
             noise: Noise { rng: [1, 2], dark: [0.0; 2], prev: [0.0; 2] },
             adaa: [(0.0, 0.0); 2],
@@ -586,6 +633,8 @@ struct Knobs {
     resonance: Smoother,
     filter_mix: Smoother,
     drive: Smoother,
+    /// FILTER_TYPES index.
+    filter_type: usize,
     /// 0..1, octaves of cutoff per octave of pitch.
     keytrack: f32,
     /// 0..1 analog drift amount.
@@ -656,7 +705,13 @@ fn voice_targets(k: &Knobs, m: &ModMatrix, v: &Voice, layout: &UnisonLayout, sam
     c[C_G] = (core::f32::consts::PI * cutoff / sample_rate).tan();
     // 4th-order Butterworth pole pair (Q 0.54 / 1.31); resonance sharpens the second.
     c[C_K1] = 1.848 - 0.6 * res;
-    c[C_K2] = 0.765 * (1.0 - res) + 0.04 * res;
+    c[C_K2] = if matches!(k.filter_type, LP12 | HP12 | BP12 | NOTCH) {
+        // One resonant stage: Butterworth (k = sqrt 2) down to a near-self-oscillating peak.
+        core::f32::consts::SQRT_2 * (1.0 - res) + 0.04 * res
+    } else {
+        0.765 * (1.0 - res) + 0.04 * res
+    };
+    c[C_COMB] = sample_rate / cutoff.max(COMB_MIN_HZ);
     c[C_MIX] = k.filter_mix.value;
     c[C_POS_A] = a.position;
     c[C_GAIN_A] = a.gain;
@@ -715,6 +770,10 @@ pub struct WavetableSynth {
     shadow: Shadow,
     global: GlobalMod,
     voicing: Voicing,
+    /// Per-voice stereo comb filter lines (filter type comb).
+    combs: Vec<[DelayLine; 2]>,
+    /// Feedback of the comb, from resonance.
+    comb_fb: f32,
 }
 
 /// Mono/glide state. In mono mode voice 0 plays every note.
@@ -795,12 +854,20 @@ impl WavetableSynth {
                 resonance: s(0.2, 0.01),
                 filter_mix: s(1.0, 0.01),
                 drive: s(0.0, 0.01),
+                filter_type: LP24,
                 keytrack: 0.0,
                 drift: 0.0,
             },
             matrix: ModMatrix::new(sample_rate),
             shadow: Shadow { note: 60, env1: Envelope::IDLE, mods: ModVoice::IDLE },
             global: GlobalMod::NONE,
+            combs: (0..MAX_VOICES)
+                .map(|_| {
+                    let len = (sample_rate / COMB_MIN_HZ) as usize + 4;
+                    [DelayLine::new(len), DelayLine::new(len)]
+                })
+                .collect(),
+            comb_fb: comb_feedback(0.2),
             voicing: Voicing { mono: false, legato: false, glide: 0.0, held: [0; MAX_HELD], held_len: 0, just_released: false, last: None },
         }
     }
@@ -814,6 +881,9 @@ impl WavetableSynth {
     /// that stops rendering would otherwise hang mid-envelope.
     pub fn kill_voices(&mut self) {
         self.voices = [Voice::idle(); MAX_VOICES];
+        for line in self.combs.iter_mut().flatten() {
+            line.clear();
+        }
         self.voicing.held_len = 0;
         self.voicing.just_released = false;
         self.shadow.env1 = Envelope::IDLE;
@@ -947,7 +1017,7 @@ impl WavetableSynth {
             }
             v.a.ramp(&t.a);
             v.b.ramp(&t.b);
-            v.sub_inc = t.sub_inc;
+            v.sub_dinc = (t.sub_inc - v.sub_inc) * k;
             v.sub_mip = t.sub_mip;
         }
     }
@@ -962,10 +1032,14 @@ impl WavetableSynth {
             _ => 1.0,
         };
         let nf = &self.noise_filter;
-        for v in self.voices.iter_mut() {
+        let mode = self.knobs.filter_type;
+        let comb_fb = self.comb_fb;
+        let comb_gain = (1.0 - comb_fb * comb_fb).sqrt();
+        for (vi, v) in self.voices.iter_mut().enumerate() {
             if !v.active() {
                 continue;
             }
+            let comb = &mut self.combs[vi];
             // Ramp the shared control values once per sample.
             let mut cs = [[0.0f32; N_CTL]; CONTROL];
             let mut c = v.ctl;
@@ -998,6 +1072,7 @@ impl WavetableSynth {
                 for i in 0..m {
                     let s = t.read(b0, b1, ff, v.sub_phase) * cs[i][C_GAIN_SUB];
                     v.sub_phase += v.sub_inc;
+                    v.sub_inc += v.sub_dinc;
                     if v.sub_phase >= 1.0 {
                         v.sub_phase -= 1.0;
                     }
@@ -1038,11 +1113,23 @@ impl WavetableSynth {
                 let c1 = SvfCoefs::new(c[C_G], c[C_K1]);
                 let c2 = SvfCoefs::new(c[C_G], c[C_K2]);
                 let d = c[C_DRIVE];
-                let yl = v.fl[0].lowpass(&c1, drive_sat(fl[i], d, &mut v.adaa[0]));
-                let yl = v.fl[1].lowpass(&c2, yl);
-                let yr = v.fr[0].lowpass(&c1, drive_sat(fr[i], d, &mut v.adaa[1]));
-                let yr = v.fr[1].lowpass(&c2, yr);
-                if d > 0.0 {
+                let (k1, k2) = (c[C_K1], c[C_K2]);
+                let xl = drive_sat(fl[i], d, &mut v.adaa[0]);
+                let xr = drive_sat(fr[i], d, &mut v.adaa[1]);
+                let (yl, yr) = if mode == COMB {
+                    let t = c[C_COMB];
+                    let l = xl + comb_fb * comb[0].read(t);
+                    let r = xr + comb_fb * comb[1].read(t);
+                    comb[0].push(l);
+                    comb[1].push(r);
+                    (l * comb_gain, r * comb_gain)
+                } else {
+                    (
+                        filter_sample(mode, &mut v.fl, &c1, &c2, k1, k2, xl),
+                        filter_sample(mode, &mut v.fr, &c1, &c2, k1, k2, xr),
+                    )
+                };
+                if d > 0.0 && mode != COMB {
                     // The resonance lives in the second (high-Q) stage: saturating its
                     // band-pass state inside the loop rounds the peak off as drive rises.
                     let a = (d * 2.0 / VOICE_GAIN) * (d * 2.0 / VOICE_GAIN);
@@ -1119,7 +1206,7 @@ fn unison_stack<const CUBIC: bool, const BLEND: bool>(
     let read = |(b0, b1, ff): (usize, usize, f32), ph: f32| if CUBIC { table.read_cubic(b0, b1, ff, ph) } else { table.read(b0, b1, ff, ph) };
     let w = o.mip_w;
     for u in 0..o.n_proc {
-        let (mut ph, inc) = (o.phase[u], o.inc[u]);
+        let (mut ph, mut inc, dinc) = (o.phase[u], o.inc[u], o.dinc[u]);
         let (mut gl, mut gr, dgl, dgr) = (o.gl[u], o.gr[u], o.dgl[u], o.dgr[u]);
         for i in 0..offs.len() {
             let mut s = read(offs[i], ph);
@@ -1127,6 +1214,7 @@ fn unison_stack<const CUBIC: bool, const BLEND: bool>(
                 s += (read(next[i], ph) - s) * w;
             }
             ph += inc;
+            inc += dinc;
             if ph >= 1.0 {
                 ph -= 1.0;
             }
@@ -1136,9 +1224,41 @@ fn unison_stack<const CUBIC: bool, const BLEND: bool>(
             ar[i] += s * gr;
         }
         o.phase[u] = ph;
+        o.inc[u] = inc;
         o.gl[u] = gl;
         o.gr[u] = gr;
     }
+}
+
+/// One sample through the SVF pair for filter type `mode` (not comb). The
+/// 24 dB types run both stages; the 12 dB types and notch only the resonant
+/// second one.
+#[inline(always)]
+fn filter_sample(mode: usize, st: &mut [Svf; 2], c1: &SvfCoefs, c2: &SvfCoefs, k1: f32, k2: f32, x: f32) -> f32 {
+    match mode {
+        LP12 => st[1].lowpass(c2, x),
+        HP12 => st[1].highpass(c2, k2, x),
+        HP24 => {
+            let y = st[0].highpass(c1, k1, x);
+            st[1].highpass(c2, k2, y)
+        }
+        BP12 => st[1].bandpass(c2, k2, x),
+        BP24 => {
+            let y = st[0].bandpass(c1, k1, x);
+            st[1].bandpass(c2, k2, y)
+        }
+        NOTCH => st[1].notch(c2, k2, x),
+        _ => {
+            let y = st[0].lowpass(c1, x);
+            st[1].lowpass(c2, y)
+        }
+    }
+}
+
+/// Comb feedback from resonance: a gentle 0.3 up to a ringing 0.97.
+#[inline]
+fn comb_feedback(res: f32) -> f32 {
+    0.3 + 0.67 * res.clamp(0.0, 1.0)
 }
 
 /// A voice's amp envelope: the knobs, with drift-scaled per-voice time variance.
@@ -1174,6 +1294,9 @@ impl Instrument for WavetableSynth {
         let v = &mut self.voices[i];
         if fresh {
             *v = Voice::idle();
+            for line in self.combs[i].iter_mut() {
+                line.clear();
+            }
         }
         match from {
             Some(f) if step != 0.0 => {
@@ -1316,7 +1439,10 @@ impl WavetableSynth {
             OSC_A_SEMI => k.a.semi = value.round().clamp(-12.0, 12.0),
             OSC_A_FINE => k.a.fine = value.clamp(-100.0, 100.0),
             FILTER_CUTOFF => k.log_cutoff.target = value.clamp(20.0, 20000.0).ln(),
-            FILTER_RESONANCE => k.resonance.target = value.clamp(0.0, 1.0),
+            FILTER_RESONANCE => {
+                k.resonance.target = value.clamp(0.0, 1.0);
+                self.comb_fb = comb_feedback(value);
+            }
             FILTER_ENABLED => k.filter_mix.target = on(value),
             ENV1_ATTACK => self.env1.set(0, value, sr),
             ENV1_DECAY => self.env1.set(1, value, sr),
@@ -1347,6 +1473,8 @@ impl WavetableSynth {
             FILTER_KEYTRACK => self.knobs.keytrack = value.clamp(0.0, 1.0),
             VOICE_DRIFT => self.knobs.drift = value.clamp(0.0, 1.0),
             OSC_A_DETUNE_CURVE => self.knobs.a.curve = value.clamp(0.5, 3.0),
+            FILTER_TYPE => self.knobs.filter_type = (value.round().max(0.0) as usize).min(COMB),
+            ENV1_ATTACK_CURVE => self.env1.set_analog(value >= 0.5, self.sample_rate),
             OSC_B_DETUNE_CURVE => self.knobs.b.curve = value.clamp(0.5, 3.0),
             _ => {}
         }
@@ -1699,5 +1827,90 @@ mod tests {
         s.note_on(64, 1.0);
         render_ms(&mut s, 5);
         assert!(s.voices.iter().filter(|v| v.active()).all(|v| v.envp.release_coef == s.env1.params.release_coef));
+    }
+
+    fn filtered(mode: f32, cutoff: f32) -> Vec<f32> {
+        let mut s = WavetableSynth::new(48000.0);
+        s.set_param(OSC_A_POSITION, 0.67);
+        s.set_param(FILTER_TYPE, mode);
+        s.set_param(FILTER_CUTOFF, cutoff);
+        s.set_param(FILTER_RESONANCE, 0.3);
+        s.note_on(36, 1.0); // C2, 65.4 Hz
+        let (mut l, mut r) = (vec![0.0; 48000], vec![0.0; 48000]);
+        s.render(&mut l, &mut r);
+        l.split_off(12000)
+    }
+
+    fn level(x: &[f32], freq: f32) -> f32 {
+        let w = 2.0 * core::f32::consts::PI * freq / 48000.0;
+        let c = 2.0 * w.cos();
+        let (mut s1, mut s2) = (0.0f32, 0.0f32);
+        for &v in x {
+            let s = v + c * s1 - s2;
+            s2 = s1;
+            s1 = s;
+        }
+        (s1 * s1 + s2 * s2 - c * s1 * s2).sqrt()
+    }
+
+    #[test]
+    fn filter_types_pass_and_cut_the_right_bands() {
+        let f0 = 440.0 * 2f32.powf((36.0 - 69.0) / 12.0);
+        let (low, high) = (f0, f0 * 61.0); // fundamental, ~4 kHz harmonic
+        let lp = filtered(LP24 as f32, 1000.0);
+        let hp = filtered(HP24 as f32, 1000.0);
+        assert!(level(&lp, low) > 10.0 * level(&hp, low), "HP cuts the lows");
+        assert!(level(&hp, high) > 10.0 * level(&lp, high), "LP cuts the highs");
+        let bp = filtered(BP24 as f32, 1000.0);
+        let near = f0 * 15.0; // ~981 Hz
+        assert!(level(&bp, near) > 5.0 * level(&bp, low) && level(&bp, near) > 5.0 * level(&bp, high), "BP keeps the band");
+        let lp12 = filtered(LP12 as f32, 1000.0);
+        assert!(level(&lp12, high) > level(&lp, high), "12 dB rolls off slower than 24");
+        let notch = filtered(NOTCH as f32, near);
+        let open = filtered(LP24 as f32, 20000.0);
+        assert!(level(&notch, near) < 0.3 * level(&open, near), "notch cuts at the cutoff");
+        for mode in 0..=COMB {
+            let y = filtered(mode as f32, 800.0);
+            let peak = y.iter().fold(0.0f32, |m, v| m.max(v.abs()));
+            assert!(peak.is_finite() && peak > 1e-3 && peak < 2.0, "type {mode}: peak {peak}");
+        }
+        assert_ne!(filtered(COMB as f32, 800.0), lp, "comb is its own sound");
+    }
+
+    #[test]
+    fn analog_attack_is_snappier_but_still_on_time() {
+        let mut a = Adsr::new(0.1, 0.3, 0.7, 0.2, 48000.0);
+        a.set_analog(true, 48000.0);
+        let mut e = Envelope::IDLE;
+        e.gate_on();
+        let half = e.advance(&a.params, 2400);
+        assert!(half > 0.6, "concave start: {half} at half the attack (linear: 0.5)");
+        let mut e = Envelope::IDLE;
+        e.gate_on();
+        e.advance(&a.params, 4700);
+        assert_eq!(e.stage, crate::envelope::Stage::Attack);
+        e.advance(&a.params, 200);
+        assert_ne!(e.stage, crate::envelope::Stage::Attack, "reaches full level at the attack time");
+    }
+
+    #[test]
+    fn pitch_moves_every_sample_not_every_tick() {
+        let mut s = mono(0.2, true);
+        s.note_on(48, 1.0);
+        render_ms(&mut s, 20);
+        s.note_on(60, 1.0);
+        let (mut l, mut r) = ([0.0f32; 1], [0.0f32; 1]);
+        let mut last = s.unison_freqs(60, 0)[0];
+        let mut still = 0;
+        for _ in 0..(CONTROL * 20) {
+            s.render(&mut l, &mut r);
+            let f = s.unison_freqs(60, 0)[0];
+            if f == last {
+                still += 1;
+            }
+            last = f;
+        }
+        // Stepping per tick would hold 15 of every 16 samples.
+        assert!(still < CONTROL * 2, "pitch held still for {still} samples");
     }
 }

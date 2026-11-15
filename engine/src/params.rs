@@ -202,5 +202,10 @@ pub const OSC_B_DETUNE_CURVE: u32 = 171;
 /// through the halfband). Switching silences sounding synth notes.
 pub const QUALITY: u32 = 172;
 
+/// FILTER_TYPES index: lp12, lp24, hp12, hp24, bp12, bp24, notch, comb.
+pub const FILTER_TYPE: u32 = 173;
+/// Amp envelope attack curve: 0 = linear, 1 = analog (RC charge toward 1.5).
+pub const ENV1_ATTACK_CURVE: u32 = 174;
+
 /// Number of parameter IDs this engine understands (max ID + 1).
-pub const PARAM_COUNT: u32 = 173;
+pub const PARAM_COUNT: u32 = 175;

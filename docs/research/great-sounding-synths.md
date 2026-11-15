@@ -10,8 +10,12 @@ Sourcing rule: every external claim links to the source that owns it, such as op
 > - R3: the transparent knee clipper is in. The master DC blocker was dropped. Nothing in the current path produces DC (the tube shaper has its own blocker), and the blocker's long IIR tail broke the engine's guarantee that silence is exactly silent.
 >
 > The 2x quality mode is in too (`engine/src/oversample.rs`, the Quality switch in the Voice module, default 1x).
+> Also done:
+> - All eight filter types: LP/HP/BP 12 and 24 dB, notch, and a comb tuned to the cutoff.
+> - An analog (RC) attack curve option for the amp envelope.
+> - Per-sample pitch ramps across each control tick.
 >
-> Not done yet: extra filter responses, the analog attack curve, and per-sample pitch ramps.
+> Every item in this doc is now implemented.
 
 ---
 

@@ -7,6 +7,9 @@ const MIN_RELEASE: f32 = 0.003;
 /// Envelope "time" reaches ~1% (-40 dB) of the distance to its target.
 const TIME_CONSTANTS: f32 = 4.6;
 const SILENCE: f32 = 1e-4;
+/// The analog attack charges toward this level and switches to decay on
+/// crossing 1, like an RC circuit aimed past full scale (Surge's analog ADSR).
+const ATTACK_TARGET: f32 = 1.5;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Stage {
@@ -21,6 +24,8 @@ pub enum Stage {
 #[derive(Clone, Copy, Debug)]
 pub struct EnvParams {
     pub attack_inc: f32,
+    /// Analog attack: per-sample approach toward `ATTACK_TARGET` (0 = linear attack).
+    pub attack_coef: f32,
     pub decay_coef: f32,
     pub sustain: f32,
     pub release_coef: f32,
@@ -30,10 +35,19 @@ impl EnvParams {
     pub fn new(attack: f32, decay: f32, sustain: f32, release: f32, sample_rate: f32) -> Self {
         Self {
             attack_inc: 1.0 / (attack.max(MIN_ATTACK) * sample_rate),
+            attack_coef: 0.0,
             decay_coef: (-TIME_CONSTANTS / (decay.max(MIN_DECAY) * sample_rate)).exp(),
             sustain: sustain.clamp(0.0, 1.0),
             release_coef: (-TIME_CONSTANTS / (release.max(MIN_RELEASE) * sample_rate)).exp(),
         }
+    }
+
+    /// Switch to the analog attack, timed so it still reaches full level in `attack` seconds:
+    /// from 0 toward 1.5, the remaining distance is 1/3 at t = attack, so tau = attack / ln 3.
+    pub fn with_analog_attack(mut self, attack: f32, sample_rate: f32) -> Self {
+        let tau = attack.max(MIN_ATTACK) / 3.0f32.ln();
+        self.attack_coef = 1.0 - (-1.0 / (tau * sample_rate)).exp();
+        self
     }
 }
 
@@ -44,18 +58,31 @@ pub struct Adsr {
     pub decay: f32,
     pub sustain: f32,
     pub release: f32,
+    /// Analog (RC) attack curve instead of linear.
+    pub analog: bool,
     pub params: EnvParams,
 }
 
 impl Adsr {
     pub fn new(attack: f32, decay: f32, sustain: f32, release: f32, sample_rate: f32) -> Self {
-        Self { attack, decay, sustain, release, params: EnvParams::new(attack, decay, sustain, release, sample_rate) }
+        Self { attack, decay, sustain, release, analog: false, params: EnvParams::new(attack, decay, sustain, release, sample_rate) }
+    }
+
+    fn params_for(&self, attack: f32, decay: f32, release: f32, sample_rate: f32) -> EnvParams {
+        let p = EnvParams::new(attack, decay, self.sustain, release, sample_rate);
+        if self.analog { p.with_analog_attack(attack, sample_rate) } else { p }
+    }
+
+    /// Choose the analog (true) or linear attack curve.
+    pub fn set_analog(&mut self, analog: bool, sample_rate: f32) {
+        self.analog = analog;
+        self.params = self.params_for(self.attack, self.decay, self.release, sample_rate);
     }
 
     /// Coefficients with the attack, decay and release times scaled by `scale`
     /// (per-voice analog variance).
     pub fn scaled(&self, scale: [f32; 3], sample_rate: f32) -> EnvParams {
-        EnvParams::new(self.attack * scale[0], self.decay * scale[1], self.sustain, self.release * scale[2], sample_rate)
+        self.params_for(self.attack * scale[0], self.decay * scale[1], self.release * scale[2], sample_rate)
     }
 
     /// Set stage `index` (0 attack, 1 decay, 2 sustain, 3 release) and refresh coefficients.
@@ -66,7 +93,7 @@ impl Adsr {
             2 => self.sustain = value.clamp(0.0, 1.0),
             _ => self.release = value.clamp(0.0, 20.0),
         }
-        self.params = EnvParams::new(self.attack, self.decay, self.sustain, self.release, sample_rate);
+        self.params = self.params_for(self.attack, self.decay, self.release, sample_rate);
     }
 }
 
@@ -107,7 +134,11 @@ impl Envelope {
         match self.stage {
             Stage::Idle => {}
             Stage::Attack => {
-                self.level += p.attack_inc;
+                if p.attack_coef > 0.0 {
+                    self.level += (ATTACK_TARGET - self.level) * p.attack_coef;
+                } else {
+                    self.level += p.attack_inc;
+                }
                 if self.level >= 1.0 {
                     self.level = 1.0;
                     self.stage = Stage::Decay;

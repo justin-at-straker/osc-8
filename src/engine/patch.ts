@@ -93,7 +93,10 @@ export const Patch = z.object({
     mix: unit,
     keytrack: unit,
   }),
-  env1: Envelope, // amp envelope
+  env1: Envelope.extend({
+    /** "analog" charges like an RC circuit toward 1.5 (snappier onset); defaults so older patches load. */
+    attackCurve: z.enum(["linear", "analog"]).default("linear"),
+  }), // amp envelope
   env2: Envelope,
   env3: Envelope,
   lfos: z.array(Lfo).length(4),
@@ -140,7 +143,7 @@ export function defaultPatch(id = "init"): Patch {
     sub: { enabled: false, level: 0.5, octave: -1, shape: "sine" },
     noise: { enabled: false, level: 0.25, color: 0.5, toFilter: true },
     filter: { enabled: true, type: "lp24", cutoff: 4000, resonance: 0.2, drive: 0, mix: 1, keytrack: 0 },
-    env1: env(0.005, 0.3, 0.7, 0.25), env2: env(0.01, 0.4, 0, 0.3), env3: env(0.01, 0.4, 0, 0.3),
+    env1: { ...env(0.005, 0.3, 0.7, 0.25), attackCurve: "linear" }, env2: env(0.01, 0.4, 0, 0.3), env3: env(0.01, 0.4, 0, 0.3),
     lfos: [lfo(), lfo(), lfo(), lfo()],
     mod: [],
     fx: {

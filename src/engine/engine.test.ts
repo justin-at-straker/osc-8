@@ -176,7 +176,7 @@ function blipPatch() {
   const p = defaultPatch()
   p.oscA.position = 0.67
   p.oscA.randomPhase = 0 // deterministic start (a 20 ms blip is phase-sensitive)
-  p.env1 = { attack: 0, decay: 0.01, sustain: 0, release: 0.01 }
+  p.env1 = { attack: 0, decay: 0.01, sustain: 0, release: 0.01, attackCurve: "linear" }
   return p
 }
 
@@ -283,7 +283,7 @@ describe("osc8.wasm FX chain (ids 14..38)", () => {
 })
 
 describe("osc8.wasm modulation (ids 39..130)", () => {
-  const modValues = (e: Exports) => new Float32Array(e.memory.buffer, e.mod_values_ptr(), 173)
+  const modValues = (e: Exports) => new Float32Array(e.memory.buffer, e.mod_values_ptr(), 175)
 
   it("the default patch has no live routes and reads back knob values", async () => {
     const e = await withPatch(defaultPatch())

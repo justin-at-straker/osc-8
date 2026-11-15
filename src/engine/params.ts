@@ -2,7 +2,7 @@
 // The numeric IDs MUST match engine/src/params.rs exactly. Append only; never renumber.
 // Values are sent in the same engineering units as patch.ts.
 import type { Patch } from "./patch"
-import { BUILTIN_TABLES, DELAY_TIMES, DIST_TYPES, LFO_SHAPES, Lfo, MOD_SOURCES } from "./patch"
+import { BUILTIN_TABLES, DELAY_TIMES, DIST_TYPES, FILTER_TYPES, LFO_SHAPES, Lfo, MOD_SOURCES } from "./patch"
 
 const SUB_SHAPES = ["sine", "triangle", "square"] as const
 
@@ -107,6 +107,8 @@ export const PARAMS = [
   [170, "oscA.detuneCurve", (p: Patch) => p.oscA.detuneCurve], // 0.5..3, 1 = linear unison spacing
   [171, "oscB.detuneCurve", (p: Patch) => p.oscB.detuneCurve],
   [172, "master.quality", (p: Patch) => (p.master.quality === "2x" ? 1 : 0)], // 2x oversampled synth voices; switching silences held notes
+  [173, "filter.type", (p: Patch) => Math.max(0, FILTER_TYPES.indexOf(p.filter.type))], // lp12 lp24 hp12 hp24 bp12 bp24 notch comb
+  [174, "env1.attackCurve", (p: Patch) => (p.env1.attackCurve === "analog" ? 1 : 0)],
 ] as const
 
 export type ParamKey = (typeof PARAMS)[number][1]
