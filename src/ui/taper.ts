@@ -46,3 +46,13 @@ export function snap(value: number, min: number, max: number, step?: number): nu
 export const formatDb = (db: number) => `${db > 0 ? "+" : db < 0 ? "-" : ""}${Math.abs(db).toFixed(1)}dB`
 /** "0.25Hz", "1.6Hz", "10Hz". */
 export const formatRate = (hz: number) => `${hz < 1 ? hz.toFixed(2) : hz < 10 ? hz.toFixed(1) : Math.round(hz)}Hz`
+
+/** "L40" / "C" / "R25": a pan position, -1..1. */
+export const formatPan = (pan: number) => (Math.abs(pan) < 0.005 ? "C" : `${pan < 0 ? "L" : "R"}${Math.round(Math.abs(pan) * 100)}`)
+
+/** Noise color, 0 dark .. 0.5 white .. 1 bright, with how far it leans: "dark 60", "white", "bright 40". */
+export const formatColor = (c: number) => {
+  const tilt = Math.round((c - 0.5) * 200)
+  if (Math.abs(tilt) < 10) return "white"
+  return `${tilt < 0 ? "dark" : "bright"} ${Math.abs(tilt)}`
+}

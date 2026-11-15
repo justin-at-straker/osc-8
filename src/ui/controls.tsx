@@ -174,11 +174,17 @@ export function ParamDial({
 }
 
 /** The kit's slide switch, vertical, bound to a string patch field: for a handful of short choices like a distortion type. */
-export function ParamSlide({ param, label, options }: { param: string; label: string; options: readonly string[] }) {
-  const value = usePatchValue<string>(param)
+export function ParamSlide({ param, label, options, numeric }: { param: string; label: string; options: readonly string[]; /** The field is a number; options are its values as text, e.g. "-2". */ numeric?: boolean }) {
+  const value = usePatchValue<string | number>(param)
   return (
     <div data-param={param} data-osc-slide>
-      <SlideSwitch label={label} options={[...options]} value={value} orientation="vertical" onValueChange={(next) => writePatchValue(param, next)} />
+      <SlideSwitch
+        label={label}
+        options={[...options]}
+        value={String(value)}
+        orientation="vertical"
+        onValueChange={(next) => writePatchValue(param, numeric ? Number(next) : next)}
+      />
     </div>
   )
 }

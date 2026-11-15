@@ -76,13 +76,13 @@ describe("FrontPanel FX page", () => {
     fireEvent.click(fxTab())
     fireEvent.keyDown(screen.getByLabelText("Reverb size"), { key: "Home" })
     fireEvent.click(synthTab())
-    fireEvent.keyDown(screen.getByLabelText("Master volume"), { key: "End" })
+    fireEvent.keyDown(screen.getByLabelText("Osc A level"), { key: "End" })
     fireEvent.click(fxTab())
     expect((screen.getByLabelText("Reverb size") as HTMLInputElement).value).toBe("0%")
     fireEvent.click(synthTab())
-    expect((screen.getByLabelText("Master volume") as HTMLInputElement).value).toBe("100%")
+    expect((screen.getByLabelText("Osc A level") as HTMLInputElement).value).toBe("100%")
     expect(getState().patch.fx.reverb.size).toBe(0)
-    expect(getState().patch.master.volume).toBe(1)
+    expect(getState().patch.oscA.level).toBe(1)
   })
 
   it("Ctrl+Z and Ctrl+Shift+Z undo and redo", () => {

@@ -71,13 +71,13 @@ describe("drag to modulate", () => {
   it("a duplicate source->target is selected, not added", () => {
     const { container } = setup()
     dragHandle("LFO 1", dialOf(container, "filter.resonance"))
-    dragHandle("Env 3", dialOf(container, "master.volume"))
+    dragHandle("Env 3", dialOf(container, "oscA.level"))
     dragHandle("LFO 1", dialOf(container, "filter.resonance"))
     expect(getState().patch.mod).toHaveLength(2)
     fireEvent.click(screen.getByRole("tab", { name: /Mod/ }))
     fireEvent.click(screen.getByRole("tab", { name: /Routes/ }))
     expect(screen.getByLabelText("Route 1: LFO 1 to Filter resonance").hasAttribute("data-selected")).toBe(true)
-    expect(screen.getByLabelText("Route 2: Env 3 to Master volume").hasAttribute("data-selected")).toBe(false)
+    expect(screen.getByLabelText("Route 2: Env 3 to Osc A level").hasAttribute("data-selected")).toBe(false)
   })
 
   it("the knob's context menu adds a route", () => {

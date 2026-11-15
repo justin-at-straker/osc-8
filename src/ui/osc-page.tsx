@@ -11,6 +11,7 @@ import { useQwertyKeyboard } from "./use-qwerty-keyboard"
 import type { EngineControls } from "./types"
 import "./osc.css"
 import "./mod.css"
+import "./synth.css"
 
 /**
  * The M1 instrument: one device with the transport and the AI slot across the

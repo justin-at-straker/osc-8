@@ -3,6 +3,7 @@ import { setTransport, useStore } from "@/state/store"
 import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/ui/icon"
 import { Lcd, LcdDigits } from "@/components/ui/lcd"
+import { ParamKnob } from "./controls"
 import { Knob } from "./knob"
 import { isTextEntry } from "./keys"
 import { MAX_BPM, MIN_BPM, togglePlay } from "./transport-actions"
@@ -27,7 +28,7 @@ function useSpaceToPlay(engine?: EngineControls) {
 
 /**
  * The transport strip: an LCD with tempo, playhead step and (optionally) the
- * QWERTY octave, the play/stop key, and a tempo encoder.
+ * QWERTY octave, the play/stop key, the tempo encoder and master volume.
  */
 export function Transport({ engine, octave }: { engine?: EngineControls; octave?: number }) {
   const playing = useStore((s) => s.transport.playing)
@@ -78,6 +79,17 @@ export function Transport({ engine, octave }: { engine?: EngineControls; octave?
           value={bpm}
           resetValue={120}
           onValueChange={(next) => setTransport({ bpm: next })}
+        />
+        <ParamKnob
+          param="master.volume"
+          label="Master volume"
+          legend="Volume"
+          min={0}
+          max={1}
+          step={0.001}
+          format={{ style: "percent", maximumFractionDigits: 0 }}
+          color="blue"
+          resetValue={0.7}
         />
       </div>
     </div>

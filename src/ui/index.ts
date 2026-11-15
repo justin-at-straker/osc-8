@@ -1,5 +1,5 @@
 export type { EngineControls } from "./types"
-export { SynthPanel } from "./synth-panel"
+export { SynthPanel, type SynthPage } from "./synth-panel"
 export { Transport } from "./transport"
 export { togglePlay, MIN_BPM, MAX_BPM } from "./transport-actions"
 export { PianoRoll } from "./piano-roll"

@@ -12,7 +12,7 @@ beforeEach(() => {
 describe("SynthPanel", () => {
   it("labels every M1 control and tags it with its patch path", () => {
     const { container } = render(<SynthPanel />)
-    for (const label of ["Filter cutoff", "Filter resonance", "Osc A position", "Osc A level", "Amp attack", "Master volume", "Osc A octave"]) {
+    for (const label of ["Filter cutoff", "Filter resonance", "Osc A position", "Osc A level", "Amp attack", "Osc A octave"]) {
       expect(screen.getByLabelText(label)).toBeTruthy()
     }
     const params = [...container.querySelectorAll("[data-param]")].map((el) => el.getAttribute("data-param"))
@@ -20,7 +20,7 @@ describe("SynthPanel", () => {
       expect.arrayContaining([
         "oscA.table", "oscA.position", "oscA.level", "oscA.octave", "oscA.semi", "oscA.fine",
         "filter.enabled", "filter.cutoff", "filter.resonance",
-        "env1.attack", "env1.decay", "env1.sustain", "env1.release", "master.volume",
+        "env1.attack", "env1.decay", "env1.sustain", "env1.release",
       ])
     )
     expect(container.querySelector('[data-param="filter.cutoff"]')?.contains(screen.getByLabelText("Filter cutoff"))).toBe(true)
@@ -37,11 +37,11 @@ describe("SynthPanel", () => {
 
   it("dragging a knob's dial writes the patch", () => {
     const { container } = render(<SynthPanel />)
-    const dial = container.querySelector('[data-param="master.volume"] [data-kit="knob-dial"]')!
+    const dial = container.querySelector('[data-param="oscA.level"] [data-kit="knob-dial"]')!
     fireEvent.pointerDown(dial, { button: 0, clientY: 200, pointerId: 1 })
     fireEvent.pointerMove(dial, { clientY: 178, pointerId: 1 })
     fireEvent.pointerUp(dial, { pointerId: 1 })
-    expect(getState().patch.master.volume).toBeCloseTo(0.8, 2)
+    expect(getState().patch.oscA.level).toBeCloseTo(0.85, 2)
   })
 
   it("typing into a knob's readout writes the patch (how the UI SDK agent sets it)", () => {

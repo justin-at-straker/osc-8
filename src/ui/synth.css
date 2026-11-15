@@ -1,0 +1,174 @@
+/* SYNTH page: oscillators A/B, sub, noise; master volume beside tempo. */
+
+[data-osc-tempo] {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+/* OSC sub-page: the oscillator place, then the filter. */
+[data-osc-synth-osc] {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+[data-osc-synth-layers] {
+  grid-template-columns: repeat(3, auto);
+  justify-content: start;
+  gap: 8px;
+}
+
+/* A / B: lettered plates down the oscillator's left edge. */
+[data-osc-oscs] {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px;
+  min-width: 0;
+}
+
+[data-osc-ab] {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 6px;
+  width: 28px;
+}
+
+[data-osc-ab-key] {
+  position: relative;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  font: 700 15px/1 var(--sans);
+  color: var(--legend-ink);
+  background: linear-gradient(180deg, #fbfbf9, #efefeb);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 3px 0 #d6d6d2,
+    0 4px 4px -2px rgb(0 0 0 / 0.12);
+  translate: 0 -2px;
+  cursor: pointer;
+
+  &[aria-selected="true"] {
+    translate: 0;
+    color: var(--ink);
+    background: #e6e6e3;
+    box-shadow:
+      inset 0 1px 2px rgb(0 0 0 / 0.12),
+      0 1px 0 #fff;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--key-color);
+    outline-offset: 2px;
+  }
+}
+
+[data-osc-ab-led] {
+  position: absolute;
+  top: 5px;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  border-radius: 50%;
+  background: #c9c9c5;
+  box-shadow: inset 0 1px 1px rgb(0 0 0 / 0.25);
+
+  &[data-on] {
+    background: var(--key-color);
+    box-shadow:
+      0 0 3px color-mix(in oklab, var(--key-color) 90%, transparent),
+      0 0 6px color-mix(in oklab, var(--key-color) 50%, transparent);
+  }
+}
+
+[data-osc-oscbody] {
+  padding-inline: 8px;
+
+  & > h2[data-osc-powered] {
+    gap: 6px;
+  }
+
+  & [data-osc-controls] {
+    gap: 0;
+    justify-content: space-between;
+  }
+
+  /* Knobs a little narrower here, so a whole oscillator fits one row. */
+  & [data-kit="knob"] [data-kit="knob-readout"]:not(#_):not(#_):not(#_) {
+    width: 46px;
+  }
+}
+
+[data-osc-header-legend] {
+  order: 2;
+  font-size: 7px;
+}
+
+/* Unison voices at a glance: one LED per voice, and the count. */
+[data-osc-unison-leds] {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-inline-start: 4px;
+
+  & i {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: rgb(0 0 0 / 0.12);
+
+    &[data-on] {
+      background: var(--key-color);
+      box-shadow: 0 0 3px color-mix(in oklab, var(--key-color) 60%, transparent);
+    }
+  }
+
+  & b {
+    margin-inline-start: 4px;
+    font: 600 8px/1 var(--sans);
+    letter-spacing: 0.06em;
+    color: var(--ink);
+  }
+}
+
+/* The unison group: voices, detune, blend, spread, set off by hairlines. */
+[data-osc-group] {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  padding-inline: 4px;
+  border-inline: 1px solid rgb(0 0 0 / 0.07);
+
+}
+
+/* Phase and random phase: knobs a size down. */
+[data-osc-small] {
+  display: flex;
+  align-items: flex-start;
+  padding-top: 8px;
+
+  & [data-kit="knob"] [data-kit="knob-dial"]:not(#_):not(#_) {
+    width: 38px;
+    height: 38px;
+  }
+
+  & [data-kit="knob"] [data-kit="knob-cap"]:not(#_):not(#_) {
+    inset: 7px;
+  }
+
+  & [data-kit="knob"] [data-kit="knob-readout"]:not(#_):not(#_):not(#_):not(#_) {
+    width: 38px;
+  }
+}
+
+/* Sub octave and shape: short vertical slide switches. */
+[data-osc-synth-layers] [data-osc-slide] [data-kit="slide-switch"] {
+  zoom: 0.8;
+}
+
+/* The table dial a size further down on the oscillator page. */
+[data-osc-oscbody] [data-osc-dial-wrap] {
+  zoom: 0.62;
+  margin-top: 0;
+}
