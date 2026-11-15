@@ -61,9 +61,13 @@
   box-sizing: border-box;
 }
 
-/* The plate stays in the device's top corner in the column layout. */
-[data-osc-page] [data-device-plate]:not(#_):not(#_) {
-  align-self: flex-start;
+/* Header strip: the maker's plate on the left, the menubar on the right. */
+[data-osc-header] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 32px;
 }
 
 /* Top strip: transport on the left, the AI describe field on the right. */
@@ -406,4 +410,10 @@
   50% {
     opacity: 0.2;
   }
+}
+
+/* Menu items not built yet (later milestones) print faded. */
+[data-kit="popup"] [data-kit="option"][data-disabled]:not(#_):not(#_) {
+  opacity: 0.4;
+  cursor: default;
 }

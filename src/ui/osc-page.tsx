@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 import { useStore } from "@/state/store"
-import { Device } from "@/components/ui/device"
+import { Device, DevicePlate } from "@/components/ui/device"
 import { AudioGate } from "./audio-gate"
 import { PianoRoll } from "./piano-roll"
 import { SynthPanel } from "./synth-panel"
@@ -17,11 +17,17 @@ import "./osc.css"
 export function OscPage({
   engine,
   aiSlot,
+  menubar,
+  showHints = true,
   audioGate = true,
 }: {
   engine: EngineControls
   /** Rendered top right, beside the transport: the place for the AI describe field. */
   aiSlot?: ReactNode
+  /** Rendered in the device's top strip, beside the maker's plate. */
+  menubar?: ReactNode
+  /** Show the key hints line under the roll. */
+  showHints?: boolean
   /** Render the "tap to start audio" overlay. Pass false if the app renders its own <AudioGate>. */
   audioGate?: boolean
 }) {
@@ -31,16 +37,22 @@ export function OscPage({
 
   return (
     <main data-osc-page>
-      <Device model="OSC-8" name="Wavetable synth" on={audio === "on" && playing}>
+      <Device model="OSC-8" name="Wavetable synth" plate="none">
+        <div data-osc-header>
+          <DevicePlate model="OSC-8" name="Wavetable synth" on={audio === "on" && playing} />
+          {menubar}
+        </div>
         <div data-osc-top>
           <Transport engine={engine} octave={octave} />
           <div data-osc-ai-slot>{aiSlot}</div>
         </div>
         <SynthPanel />
         <PianoRoll />
-        <p data-osc-hint aria-hidden>
-          A-K play · Z/X octave · Space play · Ctrl+Z undo · drag a note to lengthen
-        </p>
+        {showHints && (
+          <p data-osc-hint aria-hidden>
+            A-K play · Z/X octave · Space play · Ctrl+Z undo · drag a note to lengthen
+          </p>
+        )}
       </Device>
       {audioGate && <AudioGate engine={engine} />}
     </main>
