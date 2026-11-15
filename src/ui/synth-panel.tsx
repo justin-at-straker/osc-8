@@ -230,6 +230,7 @@ export function SynthPanel() {
             <GlideModeSwitch />
             <ParamKnob param="voicing.glide" label="Glide time" legend="Time" min={0} max={2} step={0.001} taper={power(3)} format={seconds} color="orange" resetValue={0.06} />
             <ParamKnob param="voicing.drift" label="Analog drift" legend="Drift" {...unit} color="green" resetValue={init.voicing.drift} />
+            <ParamSlide param="master.quality" label="Quality" options={["1x", "2x"]} />
           </Module>
         </div>
       </TabsPanel>

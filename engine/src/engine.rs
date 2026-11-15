@@ -16,7 +16,7 @@ use crate::instrument::Instrument;
 use crate::modulation::{self, TARGET_SLOTS};
 use crate::params::*;
 use crate::sequencer::Sequencer;
-use crate::synth::WavetableSynth;
+use crate::oversample::Oversampled;
 
 /// Largest block `process` renders (one Web Audio render quantum).
 pub const MAX_BLOCK: usize = 128;
@@ -81,7 +81,7 @@ pub struct Engine {
 
 impl Engine {
     pub fn new(sample_rate: f32) -> Self {
-        Self::with_instrument(sample_rate, Box::new(WavetableSynth::new(sample_rate)))
+        Self::with_instrument(sample_rate, Box::new(Oversampled::new(sample_rate)))
     }
 
     pub fn with_instrument(sample_rate: f32, track: Box<dyn Instrument>) -> Self {

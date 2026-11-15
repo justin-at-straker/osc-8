@@ -9,7 +9,9 @@ Sourcing rule: every external claim links to the source that owns it, such as op
 > - R6: unison voices get fixed per-voice offsets, not a slow wander of their own. Osc A and osc B each wander independently.
 > - R3: the transparent knee clipper is in. The master DC blocker was dropped. Nothing in the current path produces DC (the tube shaper has its own blocker), and the blocker's long IIR tail broke the engine's guarantee that silence is exactly silent.
 >
-> Not done yet: the 2x oversampled quality mode, extra filter responses, the analog attack curve, and per-sample pitch ramps.
+> The 2x quality mode is in too (`engine/src/oversample.rs`, the Quality switch in the Voice module, default 1x).
+>
+> Not done yet: extra filter responses, the analog attack curve, and per-sample pitch ramps.
 
 ---
 

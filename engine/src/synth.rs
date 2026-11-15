@@ -26,6 +26,7 @@ use crate::instrument::Instrument;
 use crate::modulation::{apply, rand01, GlobalMod, ModMatrix, ModVoice, TARGET_SLOTS};
 use crate::params::*;
 use crate::wavetable::{builtin_tables, Wavetable, CUBIC_LEVELS, FRAMES, MIP_LEVELS};
+use std::rc::Rc;
 
 pub const MAX_VOICES: usize = 8;
 pub const MAX_UNISON: usize = 16;
@@ -700,7 +701,8 @@ impl NoiseFilter {
 
 pub struct WavetableSynth {
     sample_rate: f32,
-    tables: Vec<Wavetable>,
+    /// Shared with the other-rate twin in [`crate::oversample::Oversampled`].
+    tables: Rc<Vec<Wavetable>>,
     voices: [Voice; MAX_VOICES],
     age: u64,
     rng: u32,
@@ -758,12 +760,17 @@ impl Voicing {
 
 impl WavetableSynth {
     pub fn new(sample_rate: f32) -> Self {
+        Self::with_tables(sample_rate, Rc::new(builtin_tables()))
+    }
+
+    /// A synth reusing already-built tables (they are large and slow to build).
+    pub fn with_tables(sample_rate: f32, tables: Rc<Vec<Wavetable>>) -> Self {
         // Smoother time constants are per control tick (CONTROL samples each).
         let rate = sample_rate / CONTROL as f32;
         let s = |v: f32, t: f32| Smoother::with_time(v, t, rate);
         Self {
             sample_rate,
-            tables: builtin_tables(),
+            tables,
             voices: [Voice::idle(); MAX_VOICES],
             age: 0,
             rng: 0x9E37_79B9,
@@ -796,6 +803,21 @@ impl WavetableSynth {
             global: GlobalMod::NONE,
             voicing: Voicing { mono: false, legato: false, glide: 0.0, held: [0; MAX_HELD], held_len: 0, just_released: false, last: None },
         }
+    }
+
+    /// The wavetables, to share with another instance.
+    pub fn tables(&self) -> Rc<Vec<Wavetable>> {
+        Rc::clone(&self.tables)
+    }
+
+    /// Silence every voice at once (no release): the voices of an instance
+    /// that stops rendering would otherwise hang mid-envelope.
+    pub fn kill_voices(&mut self) {
+        self.voices = [Voice::idle(); MAX_VOICES];
+        self.voicing.held_len = 0;
+        self.voicing.just_released = false;
+        self.shadow.env1 = Envelope::IDLE;
+        self.shadow.mods.release();
     }
 
     /// Number of voices currently sounding (for tests/metering).

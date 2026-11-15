@@ -114,7 +114,11 @@ export const Patch = z.object({
     /** Analog drift: per-voice detune, slow pitch wander and cutoff offset. Defaults so older patches load. */
     drift: unit.default(0),
   }),
-  master: z.object({ volume: unit }),
+  master: z.object({
+    volume: unit,
+    /** Synth render quality: "2x" oversamples the voices (cleaner drive and highs, about twice the CPU). Defaults so older patches load. */
+    quality: z.enum(["1x", "2x"]).default("1x"),
+  }),
 })
 export type Patch = z.infer<typeof Patch>
 
@@ -148,7 +152,7 @@ export function defaultPatch(id = "init"): Patch {
       eq: { enabled: false, low: 0, mid: 0, high: 0 },
     },
     voicing: { mode: "poly", voices: 8, legato: false, glide: 0, drift: 0 },
-    master: { volume: 0.7 },
+    master: { volume: 0.7, quality: "1x" },
   }
 }
 

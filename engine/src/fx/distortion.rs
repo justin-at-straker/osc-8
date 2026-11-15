@@ -6,11 +6,9 @@
 #![allow(clippy::needless_range_loop)] // parallel arrays indexed by voice/line/tap
 
 use super::{Effect, FX_BLOCK};
-use crate::dsp::{db_to_gain, DelayLine, OnePole, Smoother};
+use crate::dsp::{db_to_gain, halfband, DelayLine, OnePole, Oversampler, Smoother, HALFBAND_CENTER as CENTER, HALFBAND_TAPS as TAPS};
 use crate::params::*;
 
-const TAPS: usize = 31;
-const CENTER: usize = TAPS / 2; // 15
 /// Latency of up + down sampling, in base-rate samples.
 pub const LATENCY: usize = CENTER;
 /// Makeup is computed so a sine at this peak comes out at about the same peak.
@@ -36,70 +34,6 @@ impl DistType {
             _ => Self::Tube,
         }
     }
-}
-
-/// 2x up/down sampler for one channel.
-#[derive(Clone, Copy)]
-struct Oversampler {
-    /// Input history, newest first.
-    x: [f32; CENTER + 1],
-    /// 2x-rate history, newest first (one extra slot: we decimate on the even sample).
-    v: [f32; TAPS + 1],
-}
-
-impl Oversampler {
-    const fn new() -> Self {
-        Self { x: [0.0; CENTER + 1], v: [0.0; TAPS + 1] }
-    }
-
-    /// Push one input sample, return the two 2x-rate samples (in time order).
-    #[inline]
-    fn up(&mut self, h: &[f32; TAPS], input: f32) -> (f32, f32) {
-        self.x.copy_within(0..CENTER, 1);
-        self.x[0] = input;
-        // Zero-stuffed stream filtered by h with gain 2. Even 2x samples see the
-        // even taps, odd ones the odd taps (only the center, for a halfband).
-        let mut even = 0.0;
-        for j in 0..=CENTER {
-            even += h[2 * j] * self.x[j];
-        }
-        let mut odd = 0.0;
-        for j in 0..CENTER {
-            odd += h[2 * j + 1] * self.x[j];
-        }
-        (2.0 * even, 2.0 * odd)
-    }
-
-    /// Push two 2x-rate samples, return one decimated output.
-    #[inline]
-    fn down(&mut self, h: &[f32; TAPS], a: f32, b: f32) -> f32 {
-        self.v.copy_within(0..TAPS - 1, 2);
-        self.v[1] = a;
-        self.v[0] = b;
-        // Output aligned with `a` (the even sample) so latency is a whole number of input samples.
-        let mut y = 0.0;
-        for k in 0..TAPS {
-            y += h[k] * self.v[k + 1];
-        }
-        y
-    }
-}
-
-fn halfband() -> [f32; TAPS] {
-    let mut h = [0.0f32; TAPS];
-    let mut sum = 0.0;
-    for (k, v) in h.iter_mut().enumerate() {
-        let n = k as f64 - CENTER as f64;
-        let sinc = if n == 0.0 { 1.0 } else { (core::f64::consts::PI * n / 2.0).sin() / (core::f64::consts::PI * n / 2.0) };
-        let t = 2.0 * core::f64::consts::PI * k as f64 / (TAPS - 1) as f64;
-        let w = 0.42 - 0.5 * t.cos() + 0.08 * (2.0 * t).cos(); // Blackman
-        *v = (0.5 * sinc * w) as f32;
-        sum += *v;
-    }
-    for v in h.iter_mut() {
-        *v /= sum;
-    }
-    h
 }
 
 #[inline]

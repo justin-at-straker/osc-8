@@ -106,6 +106,7 @@ export const PARAMS = [
   [169, "voicing.drift", (p: Patch) => p.voicing.drift], // 0..1 analog drift: per-voice detune, wander, cutoff offset
   [170, "oscA.detuneCurve", (p: Patch) => p.oscA.detuneCurve], // 0.5..3, 1 = linear unison spacing
   [171, "oscB.detuneCurve", (p: Patch) => p.oscB.detuneCurve],
+  [172, "master.quality", (p: Patch) => (p.master.quality === "2x" ? 1 : 0)], // 2x oversampled synth voices; switching silences held notes
 ] as const
 
 export type ParamKey = (typeof PARAMS)[number][1]

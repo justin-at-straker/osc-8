@@ -61,7 +61,8 @@ fn param_ids_match_params_ts() {
     }
     assert_eq!(BASE_PARAM_COUNT as usize, ids.len());
     assert_eq!(MOD_END, 131);
-    assert_eq!(PARAM_COUNT, 172);
+    assert_eq!(PARAM_COUNT, 173);
+    assert_eq!(QUALITY, 172);
     assert_eq!((OSC_A_DETUNE_CURVE, OSC_B_DETUNE_CURVE), (170, 171));
     assert_eq!((FILTER_DRIVE, FILTER_KEYTRACK, VOICE_DRIFT), (167, 168, 169));
     assert_eq!((VOICE_MODE, VOICE_LEGATO, GLIDE_TIME), (164, 165, 166));

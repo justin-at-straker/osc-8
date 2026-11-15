@@ -198,5 +198,9 @@ pub const VOICE_DRIFT: u32 = 169;
 pub const OSC_A_DETUNE_CURVE: u32 = 170;
 pub const OSC_B_DETUNE_CURVE: u32 = 171;
 
+/// Synth render quality: 0 = 1x, 1 = 2x oversampled voices (decimated
+/// through the halfband). Switching silences sounding synth notes.
+pub const QUALITY: u32 = 172;
+
 /// Number of parameter IDs this engine understands (max ID + 1).
-pub const PARAM_COUNT: u32 = 172;
+pub const PARAM_COUNT: u32 = 173;

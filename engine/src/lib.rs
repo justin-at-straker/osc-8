@@ -9,6 +9,7 @@ pub mod envelope;
 pub mod fx;
 pub mod instrument;
 pub mod modulation;
+pub mod oversample;
 pub mod params;
 pub mod sequencer;
 pub mod synth;
@@ -129,7 +130,7 @@ pub extern "C" fn mod_active() -> u32 {
     engine().map(|e| e.mod_active() as u32).unwrap_or(0)
 }
 
-/// Pointer to `PARAM_COUNT` (172) f32, indexed by param ID: the current effective
+/// Pointer to `PARAM_COUNT` (173) f32, indexed by param ID: the current effective
 /// value of each param (knob value plus modulation from the most recent note,
 /// clamped). Params that aren't mod targets hold their knob value.
 #[no_mangle]
