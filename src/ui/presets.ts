@@ -45,9 +45,8 @@ const route = (source: Src, target: string, amount: number, aux: Src = "none") =
 export const FACTORY_PRESETS: Patch[] = [
   // ---- Bass ----
   preset("wub-machine", "BS Wub Machine", {
-    oscA: { table: table("basic"), position: 0.72, octave: -2, level: 0.85, unison: 5, detune: 0.15, blend: 0.6, spread: 0.5 },
-    oscB: { enabled: true, table: table("digital"), position: 0.4, octave: -2, level: 0.35, unison: 3, detune: 0.12, spread: 0.4 },
-    sub: { enabled: true, level: 0.5, octave: -1, shape: "sine" },
+    oscA: { table: table("basic"), position: 0.72, octave: -1, level: 0.85 },
+    sub: { enabled: true, level: 0.55, octave: -1, shape: "sine" },
     filter: { cutoff: 420, resonance: 0.55 },
     env1: { attack: 0.003, decay: 0.3, sustain: 1, release: 0.08 },
     lfos: lfos({ shape: "triangle", syncDivision: "1/8" }, { shape: "sine", syncDivision: "1/8" }),
@@ -60,8 +59,8 @@ export const FACTORY_PRESETS: Patch[] = [
     master: { volume: 0.7 },
   }),
   preset("reese-drift", "BS Reese Drift", {
-    oscA: { table: table("pwm"), position: 0.62, octave: -2, fine: -9, level: 0.8, unison: 7, detune: 0.35, blend: 0.8, spread: 0.8 },
-    oscB: { enabled: true, table: table("pwm"), position: 0.4, octave: -2, fine: 9, level: 0.6, unison: 3, detune: 0.2, blend: 0.7, spread: 0.6 },
+    oscA: { table: table("pwm"), position: 0.62, octave: -1, fine: -9, level: 0.8, unison: 7, detune: 0.3, blend: 0.8, spread: 0.45 },
+    oscB: { enabled: true, table: table("pwm"), position: 0.4, octave: -1, fine: 9, level: 0.55, unison: 3, detune: 0.2, blend: 0.7, spread: 0.4 },
     sub: { enabled: true, level: 0.55, octave: -1, shape: "sine" },
     filter: { cutoff: 380, resonance: 0.3 },
     env1: { attack: 0.004, decay: 0.4, sustain: 0.95, release: 0.14 },
@@ -75,7 +74,7 @@ export const FACTORY_PRESETS: Patch[] = [
     master: { volume: 0.72 },
   }),
   preset("sub-punch", "BS 808 Punch", {
-    oscA: { table: table("basic"), position: 0.05, octave: -2, level: 0.9 },
+    oscA: { table: table("basic"), position: 0.05, octave: -1, level: 0.9 },
     filter: { cutoff: 320, resonance: 0.05 },
     env1: { attack: 0.001, decay: 0.9, sustain: 0.35, release: 0.25 },
     env2: { attack: 0, decay: 0.07, sustain: 0, release: 0.05 },
@@ -87,8 +86,8 @@ export const FACTORY_PRESETS: Patch[] = [
     master: { volume: 0.8 },
   }),
   preset("growl-formant", "BS Growl Formant", {
-    oscA: { table: table("formant"), position: 0.3, octave: -2, level: 0.8, unison: 3, detune: 0.12, spread: 0.4 },
-    oscB: { enabled: true, table: table("digital"), position: 0.5, octave: -2, level: 0.45 },
+    oscA: { table: table("formant"), position: 0.3, octave: -1, level: 0.8, unison: 3, detune: 0.1, spread: 0.3 },
+    oscB: { enabled: true, table: table("digital"), position: 0.5, octave: -1, level: 0.35 },
     sub: { enabled: true, level: 0.5, octave: -1, shape: "sine" },
     filter: { cutoff: 1200, resonance: 0.45 },
     env1: { attack: 0.003, decay: 0.3, sustain: 0.9, release: 0.1 },

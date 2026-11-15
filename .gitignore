@@ -25,3 +25,4 @@ dist-ssr
 agent-runs/
 target/
 .spec01/
+diag.txt
