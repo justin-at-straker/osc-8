@@ -78,13 +78,4 @@ describe("SynthPanel", () => {
     fireEvent.click(screen.getByRole("radio", { name: "PWM" }))
     expect(getState().patch.oscA.table).toEqual({ kind: "builtin", name: "pwm" })
   })
-
-  it("Ctrl+Z and Ctrl+Shift+Z undo and redo", () => {
-    render(<SynthPanel />)
-    act(() => void setPatchValue("master.volume", 0.2))
-    fireEvent.keyDown(window, { key: "z", ctrlKey: true })
-    expect(getState().patch.master.volume).toBe(0.7)
-    fireEvent.keyDown(window, { key: "Z", ctrlKey: true, shiftKey: true })
-    expect(getState().patch.master.volume).toBe(0.2)
-  })
 })

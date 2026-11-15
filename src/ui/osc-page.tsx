@@ -3,7 +3,8 @@ import { useStore } from "@/state/store"
 import { Device, DevicePlate } from "@/components/ui/device"
 import { AudioGate } from "./audio-gate"
 import { PianoRoll } from "./piano-roll"
-import { SynthPanel } from "./synth-panel"
+import { FrontPanel } from "./front-panel"
+import { PresetBrowser } from "./preset-browser"
 import { Transport } from "./transport"
 import { useQwertyKeyboard } from "./use-qwerty-keyboard"
 import type { EngineControls } from "./types"
@@ -40,13 +41,14 @@ export function OscPage({
       <Device model="OSC-8" name="Wavetable synth" plate="none">
         <div data-osc-header>
           <DevicePlate model="OSC-8" name="Wavetable synth" on={audio === "on" && playing} />
+          <PresetBrowser />
           {menubar}
         </div>
         <div data-osc-top>
           <Transport engine={engine} octave={octave} />
           <div data-osc-ai-slot>{aiSlot}</div>
         </div>
-        <SynthPanel />
+        <FrontPanel />
         <PianoRoll />
         {showHints && (
           <p data-osc-hint aria-hidden>

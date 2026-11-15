@@ -41,3 +41,8 @@ export function snap(value: number, min: number, max: number, step?: number): nu
   // Trim float noise from the step arithmetic.
   return Math.min(max, Math.max(min, Number(stepped.toPrecision(10))))
 }
+
+/** "+3.0dB", "0.0dB", "-12.0dB". */
+export const formatDb = (db: number) => `${db > 0 ? "+" : db < 0 ? "-" : ""}${Math.abs(db).toFixed(1)}dB`
+/** "0.25Hz", "1.6Hz", "10Hz". */
+export const formatRate = (hz: number) => `${hz < 1 ? hz.toFixed(2) : hz < 10 ? hz.toFixed(1) : Math.round(hz)}Hz`

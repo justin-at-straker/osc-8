@@ -52,6 +52,8 @@ export type KnobProps = {
   /** Double-click the dial to return here. */
   resetValue?: number
   onValueChange: (value: number) => void
+  /** Printed readout, for units Intl can't format (dB, Hz). The input still holds the number; this shows while it isn't focused. */
+  displayValue?: (value: number) => string
 }
 
 /** Drag sensitivity: pixels of vertical travel for the whole turn. */
@@ -70,6 +72,7 @@ export function Knob({
   color = "white",
   resetValue,
   onValueChange,
+  displayValue,
 }: KnobProps) {
   const travel = toTravel(value, min, max, taper)
   // The last value sent, so a drag doesn't resend the same value and knows where it is between renders.
@@ -146,7 +149,16 @@ export function Knob({
           <KnobTicks lit={litTicks(travel)} />
           <span data-kit="knob-cap" />
         </span>
-        <NumberInputControl data-kit="knob-readout" aria-label={label} onKeyDown={onKeyDown} />
+        {displayValue ? (
+          <span data-osc-readout>
+            <NumberInputControl data-kit="knob-readout" aria-label={label} aria-valuetext={displayValue(value)} onKeyDown={onKeyDown} />
+            <span data-osc-readout-text aria-hidden>
+              {displayValue(value)}
+            </span>
+          </span>
+        ) : (
+          <NumberInputControl data-kit="knob-readout" aria-label={label} onKeyDown={onKeyDown} />
+        )}
         <span data-kit="label" aria-hidden>
           {legend ?? label}
         </span>

@@ -26,7 +26,7 @@ export function PianoRoll({ seed = true }: { seed?: boolean }) {
 
   // Seed the demo line once, so the first press of play makes sound.
   React.useEffect(() => {
-    if (seed && getState().pattern.notes.length === 0) setPattern(DEMO_PATTERN)
+    if (seed && getState().pattern.notes.length === 0) setPattern(DEMO_PATTERN, "load")
   }, [seed])
 
   const owner = React.useMemo(() => coverage(pattern), [pattern])

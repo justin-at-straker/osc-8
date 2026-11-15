@@ -1,12 +1,8 @@
-import type { ReactNode } from "react"
 import { BUILTIN_TABLES, defaultPatch } from "@/engine/patch"
-import { redo, undo } from "@/state/store"
-import { Button } from "@/components/ui/button"
-import { Icon } from "@/components/ui/icon"
 import { LOG, power } from "./taper"
-import { ParamDial, ParamKnob, ParamStepper, ParamSwitch } from "./controls"
+import { ParamDial, ParamKnob, ParamStepper } from "./controls"
 import { usePatchValue, writePatchValue } from "./use-patch"
-import { useUndoKeys } from "./use-undo-keys"
+import { Module } from "./module"
 
 const init = defaultPatch()
 
@@ -37,18 +33,8 @@ function TableDial() {
   )
 }
 
-function Module({ title, children, wide }: { title: string; children: ReactNode; wide?: boolean }) {
-  return (
-    <section data-section data-osc-module data-wide={wide || undefined} aria-label={title}>
-      <h2>{title}</h2>
-      <div data-osc-controls>{children}</div>
-    </section>
-  )
-}
-
-/** The synth front panel: OSC A, FILTER, AMP ENV and MASTER, every control bound to the patch store. */
+/** The synth page of the front panel: OSC A, FILTER, AMP ENV and MASTER, every control bound to the patch store. Undo lives in the menubar and Ctrl+Z. */
 export function SynthPanel() {
-  useUndoKeys()
   return (
     <div data-osc-panel>
       <Module title="Osc A" wide>
@@ -61,8 +47,7 @@ export function SynthPanel() {
         </div>
         <ParamKnob param="oscA.fine" label="Osc A fine tune" legend="Fine" min={-100} max={100} step={1} format={cents} resetValue={0} />
       </Module>
-      <Module title="Filter">
-        <ParamSwitch param="filter.enabled" label="Filter enabled" legend="Filter" />
+      <Module title="Filter" power={{ param: "filter.enabled", label: "Filter enabled" }}>
         <ParamKnob param="filter.cutoff" label="Filter cutoff" legend="Cutoff" min={20} max={20000} step={1} taper={LOG} format={hertz} color="orange" resetValue={init.filter.cutoff} />
         <ParamKnob param="filter.resonance" label="Filter resonance" legend="Res" min={0} max={1} step={0.001} format={percent} resetValue={init.filter.resonance} />
       </Module>
@@ -74,14 +59,6 @@ export function SynthPanel() {
       </Module>
       <Module title="Master">
         <ParamKnob param="master.volume" label="Master volume" legend="Volume" min={0} max={1} step={0.001} format={percent} color="blue" resetValue={init.master.volume} />
-        <div data-osc-stack data-osc-history>
-          <Button aria-label="Undo" onClick={() => undo()}>
-            <Icon name="undo" />
-          </Button>
-          <Button aria-label="Redo" onClick={() => redo()}>
-            <Icon name="redo" />
-          </Button>
-        </div>
       </Module>
     </div>
   )

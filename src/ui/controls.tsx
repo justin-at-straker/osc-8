@@ -4,6 +4,7 @@ import { Switch, SwitchThumb } from "@ui-sdk/react/switch"
 import { haptic } from "@/lib/haptics"
 import { Icon } from "@/components/ui/icon"
 import { ModeDial } from "@/components/ui/mode-dial"
+import { SlideSwitch } from "@/components/ui/slide-switch"
 import { Knob, type KnobProps } from "./knob"
 import { usePatchValue, writePatchValue } from "./use-patch"
 
@@ -87,10 +88,10 @@ export function ParamStepper({
 }
 
 /** An on/off switch bound to a boolean patch field. */
-export function ParamSwitch({ param, label, legend }: { param: string; label: string; legend?: string }) {
+export function ParamSwitch({ param, label, legend, compact }: { param: string; label: string; legend?: string; compact?: boolean }) {
   const checked = usePatchValue<boolean>(param)
   return (
-    <div data-param={param} data-osc-switch>
+    <div data-param={param} data-osc-switch={compact ? "compact" : ""}>
       <Switch
         data-kit="switch"
         aria-label={label}
@@ -102,9 +103,11 @@ export function ParamSwitch({ param, label, legend }: { param: string; label: st
       >
         <SwitchThumb data-kit="switch-thumb" />
       </Switch>
-      <span data-osc-legend aria-hidden>
-        {legend ?? label}
-      </span>
+      {!compact && (
+        <span data-osc-legend aria-hidden>
+          {legend ?? label}
+        </span>
+      )}
     </div>
   )
 }
@@ -126,6 +129,16 @@ export function ParamDial({
   return (
     <div data-param={param} data-osc-dial-wrap>
       <ModeDial label={label} options={options} value={value} onValueChange={onChange} sweep={200} />
+    </div>
+  )
+}
+
+/** The kit's slide switch, vertical, bound to a string patch field: for a handful of short choices like a distortion type. */
+export function ParamSlide({ param, label, options }: { param: string; label: string; options: readonly string[] }) {
+  const value = usePatchValue<string>(param)
+  return (
+    <div data-param={param} data-osc-slide>
+      <SlideSwitch label={label} options={[...options]} value={value} orientation="vertical" onValueChange={(next) => writePatchValue(param, next)} />
     </div>
   )
 }

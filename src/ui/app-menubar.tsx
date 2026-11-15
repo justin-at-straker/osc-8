@@ -10,14 +10,19 @@ import {
   MenuItem,
   MenuItemIndicator,
   MenuSeparator,
+  MenuSub,
+  MenuSubContent,
+  MenuSubTrigger,
   MenuTrigger,
 } from "@ui-sdk/react/menu"
 import { Menubar } from "@ui-sdk/react/menubar"
 import { chosenItem } from "@/lib/chosen-item"
+import { Icon } from "@/components/ui/icon"
 import { onSoundChange, setSoundEnabled, soundEnabled } from "@/lib/sound"
 import { defaultPatch } from "@/engine/patch"
 import { canRedo, canUndo, redo, replacePatch, setPattern, setTransport, undo, useStore } from "@/state/store"
 import { exportPatch, importPatch } from "@/state/patch-files"
+import { loadPresetById, PRESETS_BY_CATEGORY, stepPreset } from "./preset-state"
 import { togglePlay } from "./transport-actions"
 import type { EngineControls } from "./types"
 
@@ -77,7 +82,11 @@ export function AppMenubar({ engine, onOpenKeys, onError, showHints, onShowHints
   const run = (value: string) => {
     switch (value) {
       case "init-patch":
-        return void replacePatch(defaultPatch(crypto.randomUUID()), "user")
+        return void replacePatch(defaultPatch(crypto.randomUUID()), "load")
+      case "next-preset":
+        return void stepPreset(1)
+      case "prev-preset":
+        return void stepPreset(-1)
       case "import-patch":
         return importPatch().catch((e: Error) => onError?.(e.message))
       case "export-patch":
@@ -99,6 +108,8 @@ export function AppMenubar({ engine, onOpenKeys, onError, showHints, onShowHints
         return void setTimeout(focusDescribe, 0)
       case "keys":
         return onOpenKeys?.()
+      default:
+        loadPresetById(value)
     }
   }
 
@@ -118,6 +129,32 @@ export function AppMenubar({ engine, onOpenKeys, onError, showHints, onShowHints
               { value: "export-wav", label: "Export WAV…", disabled: true, hint: "Coming in M4" },
             ]}
           />
+        </MenuContent>
+      </Menu>
+
+      <Menu onAction={run}>
+        <MenuTrigger data-kit="menubar-trigger">Presets</MenuTrigger>
+        <MenuContent data-kit="popup" align="start" sideOffset={14}>
+          <Items
+            items={[
+              { value: "prev-preset", label: "Previous preset" },
+              { value: "next-preset", label: "Next preset" },
+              "-",
+            ]}
+          />
+          {PRESETS_BY_CATEGORY.map((group) => (
+            <MenuSub key={group.category}>
+              <MenuSubTrigger data-kit="option" data-osc-submenu>
+                {group.label}
+                <span data-osc-submenu-arrow aria-hidden>
+                  <Icon name="next" />
+                </span>
+              </MenuSubTrigger>
+              <MenuSubContent data-kit="popup" sideOffset={6}>
+                <Items items={group.presets.map((p) => ({ value: p.id, label: p.name }))} />
+              </MenuSubContent>
+            </MenuSub>
+          ))}
         </MenuContent>
       </Menu>
 

@@ -161,7 +161,8 @@
   align-items: flex-start;
   justify-content: space-around;
   gap: 4px;
-  min-height: 112px;
+  /* Both front-panel pages are the same height, so switching never moves the roll. */
+  height: 112px;
 }
 
 [data-osc-stack] {
@@ -416,4 +417,257 @@
 [data-kit="popup"] [data-kit="option"][data-disabled]:not(#_):not(#_) {
   opacity: 0.4;
   cursor: default;
+}
+
+/* ---- Front panel: SYNTH / FX station keys stood on end down the left. ---- */
+[data-osc-front][data-kit="tabs"]:not(#_):not(#_):not(#_) {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 10px;
+}
+
+[data-osc-front] > [data-kit="tabs-list"]:not(#_):not(#_):not(#_) {
+  grid-auto-flow: row;
+  grid-auto-columns: auto;
+  align-content: start;
+  gap: 4px;
+  width: 50px;
+  padding: 8px 0 0;
+
+  /* No long slot: each key stands on the panel by itself. */
+  &::before {
+    content: none;
+  }
+}
+
+[data-osc-front] [data-kit="tab"]:not(#_):not(#_):not(#_) {
+  gap: 7px;
+}
+
+/* The kit's tabs reuse --legend as a row height and print panels in body
+   type; inside the pages, the device's legend font and ink come back. */
+[data-osc-front] > [data-kit="tab-panel"]:not(#_):not(#_):not(#_) {
+  --legend: 500 7px/1 var(--sans);
+  min-width: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+}
+
+[data-osc-tab-led] {
+  position: absolute;
+  z-index: 3;
+  top: 6px;
+  right: 7px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #c9c9c5;
+  box-shadow: inset 0 1px 1px rgb(0 0 0 / 0.25);
+  translate: 0 calc(var(--lift) * -1);
+  transition: background 120ms, box-shadow 120ms;
+
+  &[data-on] {
+    background: var(--key-color);
+    box-shadow:
+      0 0 3px color-mix(in oklab, var(--key-color) 90%, transparent),
+      0 0 7px color-mix(in oklab, var(--key-color) 50%, transparent);
+  }
+}
+
+/* A section with a power switch in its header; off, its controls dim but still turn. */
+[data-osc-module] > h2[data-osc-powered] {
+  &::after {
+    order: 1;
+  }
+
+  & > [data-osc-switch] {
+    order: 2;
+  }
+}
+
+[data-osc-switch="compact"]:not(#_) {
+  display: inline-flex;
+  padding: 0;
+  margin-block: -6px;
+
+  & [data-kit="switch"]:not(#_):not(#_) {
+    zoom: 0.62;
+  }
+
+  & [data-kit="switch"]:not(#_):not(#_)::before,
+  & [data-kit="switch"]:not(#_):not(#_)::after {
+    content: none;
+  }
+}
+
+[data-osc-controls] {
+  transition: opacity 160ms, filter 160ms;
+
+  &[data-off] {
+    opacity: 0.45;
+    filter: saturate(0.25);
+  }
+}
+
+/* ---- FX page: six modules, so knobs a size down. ---- */
+[data-osc-fx] {
+  grid-template-columns: repeat(6, auto);
+  gap: 8px;
+
+  & [data-osc-module] {
+    padding-inline: 8px;
+  }
+
+  & [data-osc-controls] {
+    gap: 2px;
+  }
+
+  & [data-kit="knob"] [data-kit="knob-dial"]:not(#_):not(#_) {
+    width: 46px;
+    height: 46px;
+  }
+
+  & [data-kit="knob"] [data-kit="knob-cap"]:not(#_):not(#_) {
+    inset: 8px;
+  }
+
+  & [data-kit="knob"] [data-kit="knob-readout"]:not(#_):not(#_):not(#_) {
+    width: 46px;
+  }
+
+  /* Ping-pong: the switch without its OFF/ON prints, its legend under it. */
+  & [data-osc-switch=""] {
+    padding: 14px 0 0;
+
+    & [data-kit="switch"]:not(#_):not(#_) {
+      zoom: 0.8;
+    }
+
+    & [data-kit="switch"]:not(#_):not(#_)::before,
+    & [data-kit="switch"]:not(#_):not(#_)::after {
+      content: none;
+    }
+  }
+}
+
+/* A vertical slide switch for a short list of modes (distortion type, delay time). */
+[data-osc-slide] {
+  & [data-kit="field"] > [data-kit="label"] {
+    display: none;
+  }
+
+  & [data-kit="slide-switch"] {
+    zoom: 0.64;
+  }
+}
+
+/* A readout printed in units Intl can't format: the number input underneath,
+   our text over it until the input is focused for typing. */
+[data-osc-readout] {
+  position: relative;
+  display: inline-grid;
+
+  & [data-osc-readout-text] {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font: 300 10px var(--sans);
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  &:not(:focus-within) [data-kit="knob-readout"]:not(#_):not(#_) {
+    color: transparent;
+  }
+
+  &:focus-within [data-osc-readout-text] {
+    visibility: hidden;
+  }
+}
+
+/* ---- Presets: a one-line LCD between prev/next keys, in the header strip. ---- */
+[data-osc-presets] {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+
+  & [data-kit="button"]:not(#_):not(#_):not(#_) {
+    height: 30px;
+    min-width: 30px;
+    width: 30px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+[data-osc-preset-lcd][data-kit="lcd"]:not(#_):not(#_) {
+  width: 230px;
+  padding: 6px 10px;
+
+  & [data-kit="lcd-body"] {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
+    font-size: 12px;
+    line-height: 1.3;
+  }
+}
+
+[data-osc-preset-slot] {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--gray-dim);
+}
+
+[data-osc-preset-name] {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+
+  & [data-osc-modified] {
+    font-weight: 600;
+    margin-inline-start: 2px;
+  }
+}
+
+[data-osc-preset-list] {
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+
+  & [data-kit="option"][data-current] {
+    font-weight: 600;
+  }
+}
+
+[data-osc-menu-group] {
+  padding: 8px 12px 3px;
+  font: var(--legend, 500 7px/1 sans-serif);
+  font-size: 8px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--legend-ink, #8f8e89);
+}
+
+[data-osc-submenu] {
+  display: flex;
+  align-items: center;
+
+  & [data-osc-submenu-arrow] {
+    display: inline-flex;
+    margin-inline-start: auto;
+    padding-inline-start: 16px;
+    opacity: 0.6;
+  }
 }

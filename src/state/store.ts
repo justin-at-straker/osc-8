@@ -61,6 +61,10 @@ function deepMerge(base: unknown, edit: unknown, key?: string): unknown {
   return out
 }
 
+// Knob drags / note drags coalesce: see setPatchValue and setPattern.
+const GESTURE_MS = 600
+let lastGesture = { path: "", source: "" as Source | "", at: 0 }
+
 /** Who made the most recent patch change, for "AI changed X" UI. */
 export let lastSource: Source = "load"
 
@@ -90,6 +94,8 @@ function pushUndo() {
 export function editPatch(edit: PatchEdit | DeepPartial<Patch>, source: Source = "user"): Patch {
   const next = Patch.parse(deepMerge(state.patch, edit))
   pushUndo()
+  // A discrete edit ends any knob gesture, so the next turn starts a new undo step.
+  lastGesture.at = 0
   lastSource = source
   state = { ...state, patch: next }
   emit()
@@ -100,8 +106,6 @@ export type DeepPartial<T> = T extends unknown[] ? T : T extends object ? { [K i
 
 // Continuous gestures (a knob drag) coalesce into one undo step: repeated edits
 // to the same path from the same source within GESTURE_MS share an entry.
-const GESTURE_MS = 600
-let lastGesture = { path: "", source: "" as Source | "", at: 0 }
 
 /** Set one field by dotted path, e.g. setPatchValue("filter.cutoff", 800). Used by knobs. */
 export function setPatchValue(path: string, value: unknown, source: Source = "user") {
