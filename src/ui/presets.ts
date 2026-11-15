@@ -49,7 +49,7 @@ export const FACTORY_PRESETS: Patch[] = [
     sub: { enabled: true, level: 0.55, octave: -1, shape: "sine" },
     filter: { cutoff: 420, resonance: 0.55, drive: 0.3, keytrack: 0.2 },
     voicing: { drift: 0.1 },
-    env1: { attack: 0.003, decay: 0.3, sustain: 1, release: 0.08 },
+    env1: { attack: 0.003, decay: 0.3, sustain: 1, release: 0.08, attackCurve: "analog" },
     lfos: lfos({ shape: "triangle", syncDivision: "1/8" }, { shape: "sine", syncDivision: "1/8" }),
     mod: [route("lfo1", "filter.cutoff", 0.42), route("lfo2", "oscA.position", 0.15)],
     fx: {
@@ -65,7 +65,7 @@ export const FACTORY_PRESETS: Patch[] = [
     sub: { enabled: true, level: 0.45, octave: -1, shape: "sine" },
     filter: { cutoff: 380, resonance: 0.45, drive: 0.35, keytrack: 0.3 },
     voicing: { drift: 0.2 },
-    env1: { attack: 0.002, decay: 0.25, sustain: 0.5, release: 0.08 },
+    env1: { attack: 0.002, decay: 0.25, sustain: 0.5, release: 0.08, attackCurve: "analog" },
     env2: { attack: 0, decay: 0.18, sustain: 0, release: 0.1 },
     mod: [route("env2", "filter.cutoff", 0.45), route("velocity", "filter.cutoff", 0.15)],
     fx: {
@@ -81,7 +81,7 @@ export const FACTORY_PRESETS: Patch[] = [
     sub: { enabled: true, level: 0.55, octave: -1, shape: "sine" },
     filter: { cutoff: 380, resonance: 0.3, drive: 0.25, keytrack: 0.2 },
     voicing: { drift: 0.3 },
-    env1: { attack: 0.004, decay: 0.4, sustain: 0.95, release: 0.14 },
+    env1: { attack: 0.004, decay: 0.4, sustain: 0.95, release: 0.14, attackCurve: "analog" },
     lfos: lfos({ sync: false, rate: 0.15 }, { sync: false, rate: 0.31, shape: "triangle" }),
     mod: [route("lfo1", "oscA.position", 0.2), route("lfo2", "filter.cutoff", 0.08)],
     fx: {
@@ -94,7 +94,7 @@ export const FACTORY_PRESETS: Patch[] = [
   preset("sub-punch", "BS 808 Punch", {
     oscA: { table: table("basic"), position: 0.05, octave: -1, level: 0.9 },
     filter: { cutoff: 320, resonance: 0.05, drive: 0.15, keytrack: 0.3 },
-    env1: { attack: 0.001, decay: 0.9, sustain: 0.35, release: 0.25 },
+    env1: { attack: 0.001, decay: 0.9, sustain: 0.35, release: 0.25, attackCurve: "analog" },
     env2: { attack: 0, decay: 0.07, sustain: 0, release: 0.05 },
     mod: [route("env2", "oscA.semi", 0.25), route("velocity", "filter.cutoff", 0.15)],
     fx: {
@@ -108,7 +108,7 @@ export const FACTORY_PRESETS: Patch[] = [
     oscB: { enabled: true, table: table("digital"), position: 0.5, octave: -1, level: 0.35 },
     sub: { enabled: true, level: 0.5, octave: -1, shape: "sine" },
     filter: { cutoff: 1200, resonance: 0.45, drive: 0.4, keytrack: 0.3 },
-    env1: { attack: 0.003, decay: 0.3, sustain: 0.9, release: 0.1 },
+    env1: { attack: 0.003, decay: 0.3, sustain: 0.9, release: 0.1, attackCurve: "analog" },
     lfos: lfos({ syncDivision: "1/16" }, { shape: "random", syncDivision: "1/8" }),
     mod: [route("lfo1", "oscA.position", 0.35), route("lfo2", "filter.cutoff", 0.2)],
     fx: {
@@ -338,7 +338,7 @@ export const FACTORY_PRESETS: Patch[] = [
     sub: { enabled: true, level: 0.4, octave: -1, shape: "sine" },
     filter: { cutoff: 300, resonance: 0.62, drive: 0.35, keytrack: 0.3 },
     voicing: { drift: 0.15 },
-    env1: { attack: 0.002, decay: 0.3, sustain: 0.55, release: 0.08 },
+    env1: { attack: 0.002, decay: 0.3, sustain: 0.55, release: 0.08, attackCurve: "analog" },
     // Auto-wah: every note sweeps the resonant filter up and back.
     env2: { attack: 0.03, decay: 0.22, sustain: 0.1, release: 0.1 },
     mod: [route("env2", "filter.cutoff", 0.5), route("velocity", "filter.cutoff", 0.15)],
