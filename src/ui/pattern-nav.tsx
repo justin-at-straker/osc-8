@@ -1,4 +1,5 @@
 import { SegmentedControl, SegmentedControlItem } from "@ui-sdk/react/segmented-control"
+import { Toggle } from "@ui-sdk/react/toggle"
 import { haptic } from "@/lib/haptics"
 import type { Track } from "./drum-model"
 import { BAR_STEPS, barsOf, LENGTH_BARS, setFollow, showBar } from "./pattern-paging"
@@ -67,17 +68,16 @@ export function BarSelect({ track, label, page, bars, follow }: { track: Track; 
         options={Array.from({ length: bars }, (_, i) => ({ value: String(i), label: String(i + 1), name: `Bar ${i + 1}` }))}
         onChange={(next) => showBar(track, Number(next))}
       />
-      <button
-        type="button"
+      <Toggle
         data-osc-follow
-        aria-pressed={follow}
+        pressed={follow}
+        onPressedChange={(next) => setFollow(track, next)}
         aria-label={track === "808" ? "Follow playhead (drums)" : "Follow playhead"}
         title="Page with the playhead while playing"
-        onClick={() => setFollow(track, !follow)}
       >
         <i aria-hidden />
         Follow
-      </button>
+      </Toggle>
     </div>
   )
 }

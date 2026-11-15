@@ -4,7 +4,7 @@ import { useStore } from "@/state/store"
 import { DrumPanel } from "./drum-panel"
 import { FxPanel } from "./fx-panel"
 import { ModPanel } from "./mod-panel"
-import { ModDragGhost } from "./mod-ui"
+import { ModDragGhost, ModMenuHost } from "./mod-ui"
 import { SynthPanel } from "./synth-panel"
 import { useUndoKeys } from "./use-undo-keys"
 
@@ -63,6 +63,7 @@ export function FrontPanel({ page, onPageChange }: { page?: FrontPage; onPageCha
         <DrumPanel />
       </TabsPanel>
       <ModDragGhost />
+      <ModMenuHost />
     </Tabs>
   )
 }

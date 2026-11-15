@@ -1,4 +1,3 @@
-import { Field, FieldLabel } from "@ui-sdk/react/field"
 import { NumberInput, NumberInputControl, NumberInputDecrement, NumberInputGroup, NumberInputIncrement } from "@ui-sdk/react/number-input"
 import { Switch, SwitchThumb } from "@ui-sdk/react/switch"
 import { haptic } from "@/lib/haptics"
@@ -26,7 +25,7 @@ export function ParamKnob(props: ParamKnobProps) {
 
 function PlainKnob({ param, ...props }: ParamKnobProps) {
   const value = usePatchValue<number>(param)
-  return <Knob {...props} param={param} value={value} onValueChange={(next) => writePatchValue(param, next)} />
+  return <Knob {...props} param={param} value={value} onValueChange={(next, source) => writePatchValue(param, next, source)} />
 }
 
 function ModulatedKnob({ param, ...props }: ParamKnobProps) {
@@ -51,7 +50,7 @@ function ModulatedKnob({ param, ...props }: ParamKnobProps) {
   }, [last])
   return (
     <ModTargetArea target={param}>
-      <Knob {...props} param={param} value={value} ring={ring} ringDrag={ringDrag} liveValue={live} onValueChange={(next) => writePatchValue(param, next)} />
+      <Knob {...props} param={param} value={value} ring={ring} ringDrag={ringDrag} liveValue={live} onValueChange={(next, source) => writePatchValue(param, next, source)} />
     </ModTargetArea>
   )
 }
@@ -91,10 +90,11 @@ export function StepperControl({
           onValueChange(Math.min(max, Math.max(min, Math.round(next))))
         }}
       >
-        <Field data-kit="field">
-          <FieldLabel data-kit="label" aria-hidden>
+        {/* The legend is print only: the agent and screen readers get the full label from the input. */}
+        <div data-kit="field">
+          <span data-kit="label" aria-hidden>
             {legend ?? label}
-          </FieldLabel>
+          </span>
           <NumberInputGroup data-kit="stepper">
             <NumberInputDecrement data-kit="button" data-tone="secondary" aria-label={`Decrease ${label}`}>
               <Icon name="minus" />
@@ -104,7 +104,7 @@ export function StepperControl({
               <Icon name="plus" />
             </NumberInputIncrement>
           </NumberInputGroup>
-        </Field>
+        </div>
       </NumberInput>
     </div>
   )

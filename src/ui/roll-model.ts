@@ -56,3 +56,6 @@ export function setNoteLength(note: number, step: number, length: number) {
   if (at < 0) return write(pattern, [...pattern.notes, { step, note, length: clipped, velocity: VELOCITY }])
   write(pattern, pattern.notes.map((n, i) => (i === at ? { ...n, length: clipped } : n)))
 }
+
+/** A cell's name everywhere (people, the agent, tests): "C4, bar 2, step 5", bar and step 1-based. */
+export const rollCellLabel = (note: number, step: number) => `${noteName(note)}, bar ${Math.floor(step / 16) + 1}, step ${(step % 16) + 1}`

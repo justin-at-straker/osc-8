@@ -1,7 +1,7 @@
 // 808 pattern edits and the UI's selected drum voice. Pattern edits go
 // through setDrumPattern (undo; a drag's run of edits shares one entry).
 import { useSyncExternalStore } from "react"
-import { DEMO_DRUMS, DRUM_VOICES, type DrumHit, type DrumPattern, type DrumVoice } from "@/engine/drums"
+import { DEMO_DRUMS, DRUM_LABELS, DRUM_VOICES, type DrumHit, type DrumPattern, type DrumVoice } from "@/engine/drums"
 import { getState, setDrumPattern } from "@/state/store"
 
 export const HIT_VELOCITY = 0.8
@@ -62,3 +62,6 @@ export function useSelectedVoice(): DrumVoice {
     () => selected
   )
 }
+
+/** A drum cell's name everywhere: "Kick, bar 1, step 1", bar and step 1-based. */
+export const drumCellLabel = (voice: DrumVoice, step: number) => `${DRUM_LABELS[voice]}, bar ${Math.floor(step / 16) + 1}, step ${(step % 16) + 1}`

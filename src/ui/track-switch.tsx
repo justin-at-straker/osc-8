@@ -1,39 +1,36 @@
+import { SegmentedControl, SegmentedControlItem } from "@ui-sdk/react/segmented-control"
 import { haptic } from "@/lib/haptics"
 import type { Track } from "./drum-model"
+import { glow } from "./agent-glow"
 
 const TRACKS: { value: Track; label: string; name: string }[] = [
   { value: "synth", label: "Synth", name: "Synth track" },
   { value: "808", label: "808", name: "808 drum track" },
 ]
 
-/** Two latching keys over the pattern screen: which track's pattern it shows. */
+/**
+ * Two latching keys over the pattern screen: which track's pattern it shows.
+ * A UI SDK segmented control labelled "Track", so the agent can switch it
+ * (items "Synth track" / "808 drum track").
+ */
 export function TrackSwitch({ track, onTrackChange }: { track: Track; onTrackChange: (track: Track) => void }) {
   return (
-    <div data-osc-track-switch role="radiogroup" aria-label="Track">
+    <SegmentedControl<Track>
+      data-osc-track-switch
+      aria-label="Track"
+      value={track}
+      onValueChange={(next, details) => {
+        if (next === null || next === track) return
+        haptic("selection")
+        if (details?.source === "agent") glow("[data-osc-track-switch]")
+        onTrackChange(next as Track)
+      }}
+    >
       {TRACKS.map((t) => (
-        <button
-          key={t.value}
-          type="button"
-          role="radio"
-          aria-checked={track === t.value}
-          aria-label={t.name}
-          data-osc-track-key
-          tabIndex={track === t.value ? 0 : -1}
-          onClick={() => {
-            if (t.value !== track) haptic("selection")
-            onTrackChange(t.value)
-          }}
-          onKeyDown={(event) => {
-            if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return
-            event.preventDefault()
-            const next = TRACKS[(TRACKS.findIndex((x) => x.value === track) + 1) % TRACKS.length]
-            onTrackChange(next.value)
-            ;(event.currentTarget.parentElement?.querySelector(`[aria-label="${next.name}"]`) as HTMLElement | null)?.focus()
-          }}
-        >
+        <SegmentedControlItem key={t.value} value={t.value} data-osc-track-key aria-label={t.name}>
           {t.label}
-        </button>
+        </SegmentedControlItem>
       ))}
-    </div>
+    </SegmentedControl>
   )
 }

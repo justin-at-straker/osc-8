@@ -6,9 +6,11 @@ import { useStore } from "@/state/store"
 import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/ui/icon"
 import { CompactSelect } from "./compact-select"
-import { ParamKnob, ParamSlide, ParamSwitch } from "./controls"
+import { ParamKnob, ParamSlide, ParamSwitch, StepperControl } from "./controls"
 import {
+  addRoute,
   formatAmount,
+  TARGET_LABELS,
   MAX_ROUTES,
   removeRoute,
   selectRoute,
@@ -184,6 +186,35 @@ function RouteRow({ index }: { index: number }) {
   )
 }
 
+const NEW_SOURCES = MOD_SOURCES.filter((s) => s !== "none").map((s) => ({ value: s, label: SOURCE_LABELS[s] }))
+const NEW_TARGETS = Object.keys(TARGET_LABELS).map((t) => ({ value: t, label: TARGET_LABELS[t] }))
+
+/** Add a route without dragging: source, target, amount, Add. How the agent (and the keyboard) builds the matrix. */
+function AddRouteForm({ full }: { full: boolean }) {
+  const [source, setSourceState] = React.useState<ModSource>("lfo1")
+  const [target, setTargetState] = React.useState("filter.cutoff")
+  const [amount, setAmountState] = React.useState(25)
+  // The agent can set all three and press Add in one turn, before React re-renders:
+  // Add reads what was chosen last, not the last render's state.
+  const chosen = React.useRef({ source, target, amount })
+  const setSource = (v: ModSource) => ((chosen.current.source = v), setSourceState(v))
+  const setTarget = (v: string) => ((chosen.current.target = v), setTargetState(v))
+  const setAmount = (v: number) => ((chosen.current.amount = v), setAmountState(v))
+  return (
+    <div data-osc-add-route role="group" aria-label="Add a route">
+      <CompactSelect label="New route source" value={source} options={NEW_SOURCES} onValueChange={(v) => setSource(v as ModSource)} />
+      <span data-osc-legend aria-hidden>
+        to
+      </span>
+      <CompactSelect label="New route target" value={target} options={NEW_TARGETS} onValueChange={setTarget} />
+      <StepperControl label="New route amount" legend="%" value={amount} min={-100} max={100} signed onValueChange={setAmount} />
+      <Button aria-label="Add route" data-osc-add-route-key disabled={full} onClick={() => addRoute(chosen.current.source, chosen.current.target, chosen.current.amount / 100)}>
+        Add
+      </Button>
+    </div>
+  )
+}
+
 function RoutesList() {
   const count = useStore((s) => s.patch.mod.length)
   return (
@@ -191,6 +222,7 @@ function RoutesList() {
       <h2>
         Routes {count}/{MAX_ROUTES}
       </h2>
+      <AddRouteForm full={count >= MAX_ROUTES} />
       {count === 0 ? (
         <p data-osc-routes-empty>Drag an LFO or ENV handle onto any knob</p>
       ) : (
@@ -223,7 +255,7 @@ export function ModPanel() {
           Env
         </TabsTab>
         <TabsTab value="routes" data-osc-subtab aria-label={`Routes, ${count}`}>
-          Routes<b>{count}</b>
+          Routes <b>{count}</b>
         </TabsTab>
       </TabsList>
       <TabsPanel value="lfo" keepMounted data-osc-subpanel>

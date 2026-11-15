@@ -13,9 +13,9 @@ export function usePatchValue<T>(path: string): T {
 }
 
 /** Write a knob's value. The store validates; a value the schema rejects is dropped rather than thrown into React. */
-export function writePatchValue(path: string, value: unknown) {
+export function writePatchValue(path: string, value: unknown, source?: string) {
   try {
-    setPatchValue(path, value, "user")
+    setPatchValue(path, value, source === "agent" ? "agent" : "user")
   } catch (error) {
     console.warn(`Rejected ${path} = ${String(value)}`, error)
   }

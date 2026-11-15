@@ -6,10 +6,13 @@ import { Display } from "@/components/ui/display"
 import { Icon } from "@/components/ui/icon"
 import { StepperControl } from "./controls"
 import { DEMO_PATTERN } from "./pattern-presets"
-import { cellKey, coverage, noteName, removeNoteAt, ROLL_BOTTOM, ROLL_TOP, setNoteLength, toggleCell } from "./roll-model"
+import { cellKey, coverage, noteName, removeNoteAt, ROLL_BOTTOM, ROLL_TOP, rollCellLabel, setNoteLength, toggleCell } from "./roll-model"
 import { BarSelect, LengthSelect, Overview } from "./pattern-nav"
 import { usePatternPage } from "./use-pattern-page"
-import { BAR_STEPS, setPatternBars, showBar } from "./pattern-paging"
+import { BAR_STEPS, setPage, setPatternBars, showBar } from "./pattern-paging"
+import { NoteGridRoot } from "./grid-agent"
+import { glow } from "./agent-glow"
+
 
 // The piano roll, adapted from the SPEC-01 midi-editor block and bound to the
 // store's pattern. Rows run from the top note down; a note covers `length`
@@ -43,6 +46,43 @@ export function PianoRoll({
 
   const owner = React.useMemo(() => coverage(pattern), [pattern])
   const steps = pattern.steps
+  // The agent's view of the roll: every cell in every bar by name, and the lit ones (note starts).
+  const cells = React.useMemo(() => {
+    const byLabel = new Map<string, { note: number; step: number }>()
+    for (const note of ROWS) for (let st = 0; st < steps; st++) byLabel.set(rollCellLabel(note, st), { note, step: st })
+    return byLabel
+  }, [steps])
+  const items = React.useMemo(() => [...cells.keys()].map((label) => ({ value: label, label })), [cells])
+  const lit = React.useMemo(() => pattern.notes.map((n) => rollCellLabel(n.note, n.step)), [pattern])
+  const onAgentValue = (next: string[], details: { source: string }) => {
+    const before = new Set(lit)
+    const after = new Set(next)
+    const touched: { note: number; step: number }[] = []
+    for (const label of before) {
+      if (after.has(label)) continue
+      const c = cells.get(label)
+      const at = c ? getState().pattern.notes.findIndex((n) => n.note === c.note && n.step === c.step) : -1
+      if (c && at >= 0) {
+        removeNoteAt(at)
+        touched.push(c)
+      }
+    }
+    for (const label of after) {
+      if (before.has(label)) continue
+      const c = cells.get(label)
+      if (!c || coverage(getState().pattern).has(cellKey(c.note, c.step))) continue
+      toggleCell(c.note, c.step, length)
+      touched.push(c)
+    }
+    endGesture()
+    if (details.source !== "agent") return
+    // Show the agent's edit: page to its bar and light the cell.
+    const last = touched.at(-1)
+    if (!last) return
+    setPage("synth", Math.floor(last.step / BAR_STEPS))
+    for (const c of touched) glow(`[data-cell="${cellKey(c.note, c.step)}"]`)
+  }
+
   // One bar shows at a time; `first` is its first absolute step.
   const { page, bars, first, follow, here, noteEdit } = usePatternPage("synth", steps)
   const columns = Array.from({ length: Math.min(BAR_STEPS, steps - first) }, (_, i) => first + i)
@@ -156,14 +196,17 @@ export function PianoRoll({
         <h2>Pattern</h2>
         <LengthSelect label="Pattern length" steps={steps} onBars={setPatternBars} />
         <BarSelect track="synth" label="Pattern bar" page={page} bars={bars} follow={follow} />
-        <StepperControl label="Note length" legend="Len" value={length} min={1} max={steps} onValueChange={setLength} />
+        <StepperControl label="Note length (steps)" legend="Len" value={length} min={1} max={steps} onValueChange={setLength} />
         <Button aria-label="Clear pattern" onClick={() => setPattern({ ...pattern, notes: [] })}>
           <Icon name="trash" />
         </Button>
       </div>
       {/* The screen fills the height left in the device (see osc.css), not a fixed aspect. */}
       <Display aspect="auto">
-        <div
+        <NoteGridRoot
+          value={lit}
+          onValueChange={onAgentValue}
+          items={items}
           data-roll
           data-osc-grid
           role="grid"
@@ -196,7 +239,7 @@ export function PianoRoll({
                       data-cell={key}
                       tabIndex={active === key ? 0 : -1}
                       onFocus={() => setActive(key)}
-                      aria-label={`${name}, ${bars > 1 ? `bar ${page + 1}, ` : ""}step ${i + 1}${n ? (n.step === c ? `, ${n.length} step note` : ", held") : ""}`}
+                      aria-label={`${rollCellLabel(note, c)}${n ? (n.step === c ? `, ${n.length} step note` : ", held") : ""}`}
                       aria-selected={n !== undefined}
                       data-start={(n && n.step === c) || undefined}
                       data-held={(n && n.step !== c) || undefined}
@@ -225,7 +268,7 @@ export function PianoRoll({
               />
             ))}
           </div>
-        </div>
+        </NoteGridRoot>
       </Display>
     </div>
   )

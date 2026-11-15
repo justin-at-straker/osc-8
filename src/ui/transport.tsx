@@ -1,5 +1,5 @@
 import * as React from "react"
-import { setTransport, useStore } from "@/state/store"
+import { canRedo, canUndo, redo, setTransport, undo, useStore } from "@/state/store"
 import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/ui/icon"
 import { Lcd, LcdDigits } from "@/components/ui/lcd"
@@ -100,6 +100,25 @@ export function Transport({ engine, octave }: { engine?: EngineControls; octave?
           resetValue={0.7}
         />
       </div>
+      <HistoryKeys />
+    </div>
+  )
+}
+
+/** Undo and Redo as keys too (the menubar and Ctrl+Z have them; the agent needs keys to press). */
+function HistoryKeys() {
+  // Re-render when history may have changed.
+  useStore((s) => s.patch)
+  useStore((s) => s.pattern)
+  useStore((s) => s.drums)
+  return (
+    <div data-osc-history>
+      <Button aria-label="Undo" disabled={!canUndo()} onClick={() => undo()}>
+        <Icon name="undo" />
+      </Button>
+      <Button aria-label="Redo" disabled={!canRedo()} onClick={() => redo()}>
+        <Icon name="redo" />
+      </Button>
     </div>
   )
 }

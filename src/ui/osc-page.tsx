@@ -10,6 +10,8 @@ import type { Track } from "./drum-model"
 import { TrackSwitch } from "./track-switch"
 import { MidiImportDialog } from "./midi-import-dialog"
 import { useMidiDrop } from "./use-midi-drop"
+import { usePairZoom } from "./use-pair-zoom"
+import { useAgentGlow } from "./use-agent-glow"
 import { PresetBrowser } from "./preset-browser"
 import { ModSourceStrip } from "./mod-ui"
 import { Transport } from "./transport"
@@ -21,6 +23,7 @@ import "./synth.css"
 import "./drums.css"
 import "./paging.css"
 import "./midi.css"
+import "./ai-module.css"
 
 /**
  * The M1 instrument: one device with the transport and the AI slot across the
@@ -35,7 +38,7 @@ export function OscPage({
   audioGate = true,
 }: {
   engine: EngineControls
-  /** Rendered top right, beside the transport: the place for the AI describe field. */
+  /** The AI module (DescribeField): shown as its own device, AI-1, to the right of the instrument. Hidden from the UI SDK agent. */
   aiSlot?: ReactNode
   /** Rendered in the device's top strip, beside the maker's plate. */
   menubar?: ReactNode
@@ -59,9 +62,14 @@ export function OscPage({
   }
   const trackSwitch = <TrackSwitch track={track} onTrackChange={chooseTrack} />
   const dropping = useMidiDrop()
+  const { pageRef, pairRef } = usePairZoom()
+  useAgentGlow()
 
   return (
-    <main data-osc-page data-dropping={dropping || undefined}>
+    <main data-osc-page data-dropping={dropping || undefined} ref={pageRef}>
+      {/* The instrument and the AI-1 beside it, scaled together to fit the window. */}
+      <div data-osc-pair ref={pairRef}>
+      <div data-osc-pair-slot data-osc-instrument>
       <Device model="OSC-8" name="Wavetable synth" plate="none">
         <div data-osc-header>
           <DevicePlate model="OSC-8" name="Wavetable synth" on={audio === "on" && playing} />
@@ -70,7 +78,6 @@ export function OscPage({
         </div>
         <div data-osc-top>
           <Transport engine={engine} octave={octave} />
-          <div data-osc-ai-slot>{aiSlot}</div>
         </div>
         <FrontPanel page={page} onPageChange={setPage} />
         {track === "synth" ? (
@@ -84,6 +91,18 @@ export function OscPage({
           </p>
         )}
       </Device>
+      </div>
+      {aiSlot && (
+        <div data-osc-pair-slot data-osc-ai-device>
+          <Device model="AI-1" name="Sound agent" plate="none">
+            {/* The whole AI device is hidden from the UI SDK agent: it can't type into its own prompt. */}
+            <div data-agent-hidden data-osc-ai-body>
+              {aiSlot}
+            </div>
+          </Device>
+        </div>
+      )}
+      </div>
       {audioGate && <AudioGate engine={engine} />}
       <MidiImportDialog />
     </main>

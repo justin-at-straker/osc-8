@@ -82,7 +82,8 @@ export type KnobProps = {
   color?: "white" | "orange" | "green" | "blue"
   /** Double-click the dial to return here. */
   resetValue?: number
-  onValueChange: (value: number) => void
+  /** `source` is "agent" when the UI SDK agent turned it. */
+  onValueChange: (value: number, source?: string) => void
   /** Printed readout, for units Intl can't format (dB, Hz). The input still holds the number; this shows while it isn't focused. */
   displayValue?: (value: number) => string
   /** Modulation to draw on the tick ring. */
@@ -125,12 +126,12 @@ export function Knob({
     latest.current = { value, travel }
   }, [value, travel])
 
-  const commit = (next: number) => {
+  const commit = (next: number, source?: string) => {
     const clean = snap(next, min, max, step)
     if (clean === latest.current.value) return
     if (litTicks(toTravel(clean, min, max, taper)) !== litTicks(latest.current.travel)) haptic("selection")
     latest.current = { value: clean, travel: toTravel(clean, min, max, taper) }
-    onValueChange(clean)
+    onValueChange(clean, source)
   }
   const toTravelValue = (t: number) => fromTravel(t, min, max, taper)
 
@@ -182,7 +183,7 @@ export function Knob({
       format={format}
       locale="en-US"
       value={value}
-      onValueChange={(next) => next !== null && Number.isFinite(next) && commit(next)}
+      onValueChange={(next, details) => next !== null && Number.isFinite(next) && commit(next, details?.source)}
     >
       <div
         data-kit="knob"

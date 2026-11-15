@@ -40,24 +40,24 @@ const cell = (name: string) => screen.getByRole("gridcell", { name: new RegExp(`
 describe("808 grid", () => {
   it("click toggles a hit at velocity 0.8", () => {
     render(<DrumGrid seed={false} />)
-    fireEvent.click(cell("Kick, step 1"))
+    fireEvent.click(cell("Kick, bar 1, step 1"))
     expect(getState().drums.pattern.hits).toEqual([{ step: 0, voice: "kick", velocity: 0.8, accent: false }])
-    expect(cell("Kick, step 1").getAttribute("aria-selected")).toBe("true")
+    expect(cell("Kick, bar 1, step 1").getAttribute("aria-selected")).toBe("true")
     nextGesture()
-    fireEvent.click(cell("Kick, step 1"))
+    fireEvent.click(cell("Kick, bar 1, step 1"))
     expect(hits()).toEqual([])
   })
 
   it("drag paints along the row as one undo step", () => {
     render(<DrumGrid seed={false} />)
-    const start = cell("Closed hat, step 1")
+    const start = cell("Closed hat, bar 1, step 1")
     fireEvent.pointerDown(start, { button: 0, pointerId: 1 })
     for (const s of [2, 3, 4]) {
-      document.elementFromPoint = () => cell(`Closed hat, step ${s}`)
+      document.elementFromPoint = () => cell(`Closed hat, bar 1, step ${s}`)
       fireEvent.pointerMove(start, { pointerId: 1 })
     }
     // Over another row: ignored.
-    document.elementFromPoint = () => cell("Kick, step 5")
+    document.elementFromPoint = () => cell("Kick, bar 1, step 5")
     fireEvent.pointerMove(start, { pointerId: 1 })
     fireEvent.pointerUp(start, { pointerId: 1 })
     expect(hits()).toEqual(["closedHat@0", "closedHat@1", "closedHat@2", "closedHat@3"])
@@ -69,9 +69,9 @@ describe("808 grid", () => {
     const evenHats = [0, 2, 4, 6, 8, 10, 12, 14].map((step) => ({ step, voice: "closedHat" as const, velocity: 0.6, accent: false }))
     act(() => setDrumPattern({ steps: 16, hits: evenHats }, "load"))
     render(<DrumGrid seed={false} />)
-    const start = cell("Closed hat, step 1")
+    const start = cell("Closed hat, bar 1, step 1")
     fireEvent.pointerDown(start, { button: 0, pointerId: 1 })
-    document.elementFromPoint = () => cell("Closed hat, step 3")
+    document.elementFromPoint = () => cell("Closed hat, bar 1, step 3")
     fireEvent.pointerMove(start, { pointerId: 1 })
     fireEvent.pointerUp(start, { pointerId: 1 })
     expect(hits().filter((h) => h.startsWith("closedHat"))).toEqual(["closedHat@4", "closedHat@6", "closedHat@8", "closedHat@10", "closedHat@12", "closedHat@14"])
@@ -79,14 +79,14 @@ describe("808 grid", () => {
 
   it("Shift+click, right-click and Shift+Enter toggle accent", () => {
     render(<DrumGrid seed={false} />)
-    fireEvent.pointerDown(cell("Snare, step 5"), { button: 0, shiftKey: true, pointerId: 2 })
+    fireEvent.pointerDown(cell("Snare, bar 1, step 5"), { button: 0, shiftKey: true, pointerId: 2 })
     expect(hits()).toEqual(["snare@4!"])
-    expect(cell("Snare, step 5, accent").hasAttribute("data-accent")).toBe(true)
+    expect(cell("Snare, bar 1, step 5, accent").hasAttribute("data-accent")).toBe(true)
     nextGesture()
-    fireEvent.contextMenu(cell("Snare, step 5"))
+    fireEvent.contextMenu(cell("Snare, bar 1, step 5"))
     expect(hits()).toEqual(["snare@4"])
     nextGesture()
-    fireEvent.keyDown(cell("Snare, step 5"), { key: "Enter", shiftKey: true })
+    fireEvent.keyDown(cell("Snare, bar 1, step 5"), { key: "Enter", shiftKey: true })
     expect(hits()).toEqual(["snare@4!"])
   })
 
@@ -179,13 +179,13 @@ describe("track switch", () => {
     expect(screen.getByRole("grid", { name: "Piano roll" })).toBeTruthy()
     fireEvent.click(screen.getByRole("radio", { name: "808 drum track" }))
     expect(screen.queryByRole("grid", { name: "Piano roll" })).toBeNull()
-    expect(screen.getByRole("grid", { name: "808 step grid" })).toBeTruthy()
-    expect(screen.getByRole("tab", { name: /Drum/ }).getAttribute("aria-selected")).toBe("true")
+    expect(screen.getByRole("grid", { name: "Drum grid" })).toBeTruthy()
+    expect(screen.getByRole("tab", { name: "Drum" }).getAttribute("aria-selected")).toBe("true")
     // Seeded on first show.
     expect(getState().drums.pattern.hits.length).toBeGreaterThan(0)
     fireEvent.click(screen.getByRole("radio", { name: "Synth track" }))
     expect(screen.getByRole("grid", { name: "Piano roll" })).toBeTruthy()
-    expect(screen.getByRole("tab", { name: /Synth/ }).getAttribute("aria-selected")).toBe("true")
+    expect(screen.getByRole("tab", { name: "Synth" }).getAttribute("aria-selected")).toBe("true")
     expect(getState().pattern.notes).toEqual(notes)
   })
 })

@@ -1,0 +1,244 @@
+/* The AI-1 device beside the instrument, the pair scaled together, the
+   Undo/Redo keys and the add-route row. */
+
+[data-osc-ai-module] {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 12px;
+  min-height: 0;
+}
+
+[data-osc-ai-head] {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+
+  & [data-device-plate] {
+    flex: 1;
+  }
+
+  & [data-osc-ai-key][data-kit="button"]:not(#_):not(#_):not(#_) {
+    height: 28px;
+    min-width: 0;
+    padding: 0 12px;
+    font-size: 9px;
+  }
+}
+
+/* Status light: idle (unlit), thinking (slow amber pulse), acting (key color, quick), error (red). */
+[data-osc-ai-led] {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #c9c9c5;
+  box-shadow: inset 0 1px 1px rgb(0 0 0 / 0.25);
+
+  &[data-state="thinking"] {
+    background: #ffc24a;
+    box-shadow: 0 0 6px #ffc24a;
+    animation: osc-blink 1.1s steps(2) infinite;
+  }
+
+  &[data-state="acting"] {
+    background: var(--key-color);
+    box-shadow: 0 0 8px var(--key-color);
+    animation: osc-blink 0.35s steps(2) infinite;
+  }
+
+  &[data-state="error"] {
+    background: #ff3b30;
+    box-shadow: 0 0 6px #ff3b30;
+  }
+}
+
+[data-osc-ai-form] {
+  display: grid;
+  gap: 6px;
+
+  & [data-osc-ai-field] > [data-kit="label"] {
+    font: var(--legend);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--legend-ink);
+  }
+}
+
+[data-osc-ai-prompt]:not(#_):not(#_):not(#_) {
+  box-sizing: border-box;
+  width: 100%;
+  height: 92px;
+  min-height: 0;
+  padding: 6px 8px;
+  resize: none;
+  font: 400 12px/1.35 var(--sans);
+}
+
+[data-osc-ai-actions] {
+  display: flex;
+  gap: 6px;
+
+  & [data-kit="button"]:not(#_):not(#_):not(#_) {
+    flex: 1;
+    height: 28px;
+    min-width: 0;
+    padding: 0 8px;
+    font-size: 9px;
+  }
+}
+
+/* The action log: a small black screen of the agent's steps. */
+[data-osc-ai-log-screen] {
+  min-height: 0;
+  border-radius: 8px;
+  padding: 3px;
+  background: #1a1a19;
+  box-shadow:
+    inset 0 2px 3px rgb(0 0 0 / 0.45),
+    0 1px 0 #fff;
+}
+
+[data-osc-ai-log] {
+  height: 100%;
+  margin: 0;
+  padding: 5px 8px;
+  overflow-y: auto;
+  list-style: none;
+  box-sizing: border-box;
+  border-radius: 6px;
+  background: #0b0b0a;
+  font: 400 10px/1.45 var(--mono, monospace);
+  color: color-mix(in oklab, var(--lcd-key, #ff6a3d), #fff 25%);
+
+  & li::before {
+    content: "> ";
+    opacity: 0.5;
+  }
+
+  & [data-osc-ai-log-empty] {
+    color: #6f6f6a;
+
+    &::before {
+      content: none;
+    }
+  }
+}
+
+[data-osc-ai-status][data-kit="lcd"]:not(#_):not(#_) {
+  max-height: 96px;
+  overflow: hidden;
+
+  & [data-kit="lcd-body"] {
+    font-size: 10px;
+    line-height: 1.3;
+  }
+}
+
+/* Undo / Redo keys in the transport strip. */
+[data-osc-transport] [data-osc-history] {
+  display: grid;
+  gap: 4px;
+
+  & [data-kit="button"]:not(#_):not(#_):not(#_) {
+    width: 32px;
+    min-width: 32px;
+    height: 26px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+/* Routes: the add-route row, then the routes in one column. */
+[data-osc-add-route] {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+
+  & [data-osc-select] [data-kit="select-trigger"]:not(#_):not(#_):not(#_):not(#_) {
+    width: auto;
+    min-width: 80px;
+    max-width: 150px;
+    height: 24px;
+    font-size: 10px;
+  }
+
+  & [data-osc-stepper] [data-kit="field"] {
+    grid-auto-flow: column;
+    align-items: center;
+    gap: 4px;
+  }
+
+  & [data-osc-add-route-key][data-kit="button"]:not(#_):not(#_):not(#_) {
+    height: 24px;
+    min-width: 0;
+    padding: 0 10px;
+    font-size: 9px;
+  }
+}
+
+[data-osc-route-list]:not(#_) {
+  height: 82px;
+}
+
+[data-osc-routes-empty]:not(#_) {
+  height: 82px;
+}
+
+/* The pair: instrument and AI-1 side by side at their designed widths. */
+[data-osc-pair] {
+  display: flex;
+  align-items: stretch;
+  gap: 14px;
+  width: max-content;
+  height: 100%;
+}
+
+[data-osc-pair-slot] {
+  width: max-content;
+  height: 100%;
+}
+
+[data-osc-ai-device] {
+  --device-w: 300px;
+}
+
+[data-osc-ai-body] {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+[data-osc-ai-body] > [data-osc-ai-module] {
+  flex: 1;
+}
+
+/* What the AI just changed glows in the key color for a moment. */
+[data-agent-glow] {
+  border-radius: 10px;
+  box-shadow:
+    0 0 0 2px var(--key-color),
+    0 0 16px color-mix(in oklab, var(--key-color) 70%, transparent) !important;
+  transition: box-shadow 120ms;
+}
+
+[data-agent-glow] [data-kit="knob-dial"] {
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 3px var(--key-color),
+    0 0 18px var(--key-color);
+}
+
+/* Cells the agent pressed flare white for a moment. */
+[data-osc-grid] button[data-agent-glow]:not(#_):not(#_) {
+  outline: 2px solid #fff;
+  outline-offset: -1px;
+  box-shadow: 0 0 14px #fff !important;
+}
+
+/* Knob caps ease to a new value set from outside a drag (an AI turn, undo, a preset). */
+[data-osc-page] [data-kit="knob"]:not(:active) [data-kit="knob-cap"] {
+  transition: rotate 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}

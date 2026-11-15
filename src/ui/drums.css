@@ -42,7 +42,8 @@
   translate: 0 -1px;
   cursor: pointer;
 
-  &[aria-checked="true"] {
+  &[aria-checked="true"],
+  &[data-checked] {
     translate: 0;
     color: var(--ink);
     background: #e3e3df;

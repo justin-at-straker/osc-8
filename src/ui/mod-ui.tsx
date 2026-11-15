@@ -1,9 +1,10 @@
 import * as React from "react"
 import { createPortal } from "react-dom"
-import { Menu, MenuContent, MenuContextTrigger, MenuGroup, MenuGroupLabel, MenuItem, MenuSeparator } from "@ui-sdk/react/menu"
+import { Menu, MenuContent, MenuGroup, MenuGroupLabel, MenuItem, MenuSeparator } from "@ui-sdk/react/menu"
 import { chosenItem } from "@/lib/chosen-item"
 import { useStore } from "@/state/store"
 import { beginModDrag, useModDrag } from "./mod-drag"
+import { modMenu } from "./mod-menu"
 import {
   addRoute,
   clearTarget,
@@ -86,36 +87,93 @@ export function ModDragGhost() {
  * "Modulate with" LFO 1..4, Env 2/3, Velocity, Note, Random.
  */
 export function ModTargetArea({ target, children }: { target: string; children: React.ReactNode }) {
+  const press = React.useRef<{ x: number; y: number; timer: number } | null>(null)
+  const open = (from: EventTarget | null) => {
+    const anchor = (from as HTMLElement | null)?.closest?.("[data-param]") ?? (from as HTMLElement | null)
+    void modMenu.open({ payload: target, anchor: (anchor as HTMLElement) ?? undefined })
+  }
+  const cancelPress = () => {
+    if (press.current) clearTimeout(press.current.timer)
+    press.current = null
+  }
+  return (
+    <div
+      data-mod-target={target}
+      data-osc-mod-area
+      style={{ display: "contents" }}
+      onContextMenu={(event) => {
+        event.preventDefault()
+        open(event.target)
+      }}
+      onKeyDown={(event) => {
+        if ((event.key === "F10" && event.shiftKey) || event.key === "ContextMenu") {
+          event.preventDefault()
+          open(event.target)
+        }
+      }}
+      // Long-press on touch: hold still for half a second.
+      onPointerDown={(event) => {
+        if (event.pointerType !== "touch") return
+        const el = event.target
+        press.current = { x: event.clientX, y: event.clientY, timer: window.setTimeout(() => open(el), 550) }
+      }}
+      onPointerMove={(event) => {
+        const p = press.current
+        if (p && Math.hypot(event.clientX - p.x, event.clientY - p.y) > 8) cancelPress()
+      }}
+      onPointerUp={cancelPress}
+      onPointerCancel={cancelPress}
+    >
+      {children}
+    </div>
+  )
+}
+
+/**
+ * The shared "Modulate with" menu. Hidden from the UI SDK agent (it adds routes
+ * with the Routes page's form instead), so the agent's snapshot isn't full of menus.
+ */
+export function ModMenuHost() {
+  return (
+    <div data-agent-hidden style={{ display: "contents" }}>
+      <Menu
+        controller={modMenu}
+        onAction={(value) => {
+          const target = modMenu.getPayload()
+          if (!target) return
+          if (value === "clear") clearTarget(target)
+          else addRoute(value as ModSource, target)
+        }}
+      >
+        <MenuContent<string> data-kit="popup" data-osc-mod-menu sideOffset={6}>
+          {(state) => <ModMenuItems target={state.payload ?? ""} />}
+        </MenuContent>
+      </Menu>
+    </div>
+  )
+}
+
+function ModMenuItems({ target }: { target: string }) {
   const routed = useStore((s) => s.patch.mod.some((r) => r.target === target))
   const label = targetLabel(target)
   return (
-    <Menu
-      onAction={(value) => {
-        if (value === "clear") clearTarget(target)
-        else addRoute(value as ModSource, target)
-      }}
-    >
-      <MenuContextTrigger data-mod-target={target} data-osc-mod-area style={{ display: "contents" }}>
-        {children}
-      </MenuContextTrigger>
-      <MenuContent data-kit="popup" data-osc-mod-menu sideOffset={6} aria-label={`Modulate ${label}`}>
-        <MenuGroup>
-          <MenuGroupLabel data-osc-menu-group>Modulate {label} with</MenuGroupLabel>
-          {MENU_SOURCES.map((source) => (
-            <MenuItem key={source} value={source} data-kit="option" data-family={sourceFamily(source)} {...chosenItem}>
-              {SOURCE_LABELS[source]}
-            </MenuItem>
-          ))}
-        </MenuGroup>
-        {routed && (
-          <>
-            <MenuSeparator data-kit="separator" />
-            <MenuItem value="clear" data-kit="option" {...chosenItem}>
-              Remove modulation
-            </MenuItem>
-          </>
-        )}
-      </MenuContent>
-    </Menu>
+    <>
+      <MenuGroup>
+        <MenuGroupLabel data-osc-menu-group>Modulate {label} with</MenuGroupLabel>
+        {MENU_SOURCES.map((source) => (
+          <MenuItem key={source} value={source} data-kit="option" data-family={sourceFamily(source)} {...chosenItem}>
+            {SOURCE_LABELS[source]}
+          </MenuItem>
+        ))}
+      </MenuGroup>
+      {routed && (
+        <>
+          <MenuSeparator data-kit="separator" />
+          <MenuItem value="clear" data-kit="option" {...chosenItem}>
+            Remove modulation
+          </MenuItem>
+        </>
+      )}
+    </>
   )
 }

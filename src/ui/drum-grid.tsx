@@ -5,11 +5,14 @@ import { endGesture, getState, useStore } from "@/state/store"
 import { Button } from "@/components/ui/button"
 import { Display } from "@/components/ui/display"
 import { Icon } from "@/components/ui/icon"
-import { clearDrums, hasHit, HIT_VELOCITY, seedDrums, selectVoice, setHit, toggleAccent, toggleHit, useSelectedVoice } from "./drum-model"
+import { drumCellLabel, clearDrums, hasHit, HIT_VELOCITY, seedDrums, selectVoice, setHit, toggleAccent, toggleHit, useSelectedVoice } from "./drum-model"
 import type { EngineControls } from "./types"
 import { BarSelect, LengthSelect, Overview } from "./pattern-nav"
 import { usePatternPage } from "./use-pattern-page"
-import { BAR_STEPS, setDrumBars, showBar } from "./pattern-paging"
+import { BAR_STEPS, setDrumBars, setPage, showBar } from "./pattern-paging"
+import { DrumGridRoot } from "./grid-agent"
+import { glow } from "./agent-glow"
+
 
 // The 808 step grid, in the piano roll's black glass: a row per voice, 16
 // steps. Click toggles a hit; press and drag paints (or erases, if the press
@@ -42,6 +45,48 @@ export function DrumGrid({
   }, [seed])
 
   const hits = React.useMemo(() => new Map(pattern.hits.map((h) => [cellKey(h.voice, h.step), h])), [pattern])
+  // The agent's view of the grid: every cell in every bar by name; lit hits and accented hits.
+  const cells = React.useMemo(() => {
+    const byLabel = new Map<string, { voice: DrumVoice; step: number }>()
+    for (const voice of DRUM_VOICES) for (let st = 0; st < pattern.steps; st++) byLabel.set(drumCellLabel(voice, st), { voice, step: st })
+    return byLabel
+  }, [pattern.steps])
+  const items = React.useMemo(() => [...cells.keys()].map((label) => ({ value: label, label })), [cells])
+  const lit = React.useMemo(() => pattern.hits.map((h) => drumCellLabel(h.voice, h.step)), [pattern])
+  const accented = React.useMemo(() => pattern.hits.filter((h) => h.accent).map((h) => drumCellLabel(h.voice, h.step)), [pattern])
+  const showAgentEdit = (touched: { voice: DrumVoice; step: number }[], source: string) => {
+    endGesture()
+    if (source !== "agent" || touched.length === 0) return
+    setPage("808", Math.floor(touched[touched.length - 1].step / BAR_STEPS))
+    for (const c of touched) glow(`[data-drum-cell="${cellKey(c.voice, c.step)}"]`)
+  }
+  const onAgentValue = (next: string[], details: { source: string }) => {
+    const before = new Set(lit)
+    const after = new Set(next)
+    const touched: { voice: DrumVoice; step: number }[] = []
+    for (const label of new Set([...before, ...after])) {
+      if (before.has(label) === after.has(label)) continue
+      const c = cells.get(label)
+      if (!c) continue
+      setHit(c.voice, c.step, after.has(label))
+      touched.push(c)
+    }
+    showAgentEdit(touched, details.source)
+  }
+  const onAgentAccents = (next: string[], details: { source: string }) => {
+    const before = new Set(accented)
+    const after = new Set(next)
+    const touched: { voice: DrumVoice; step: number }[] = []
+    for (const label of new Set([...before, ...after])) {
+      if (before.has(label) === after.has(label)) continue
+      const c = cells.get(label)
+      if (!c) continue
+      toggleAccent(c.voice, c.step)
+      touched.push(c)
+    }
+    showAgentEdit(touched, details.source)
+  }
+
   // One bar shows at a time; `first` is its first absolute step.
   const { page, bars, first, follow, here, noteEdit } = usePatternPage("808", pattern.steps)
   const columns = Array.from({ length: Math.min(BAR_STEPS, pattern.steps - first) }, (_, i) => first + i)
@@ -148,13 +193,18 @@ export function DrumGrid({
         </Button>
       </div>
       <Display aspect="auto">
-        <div
+        <DrumGridRoot
+          value={lit}
+          onValueChange={onAgentValue}
+          accents={accented}
+          onAccentsChange={onAgentAccents}
+          items={items}
           data-roll
           data-osc-grid
           data-osc-drum-grid
           role="grid"
           aria-multiselectable="true"
-          aria-label="808 step grid"
+          aria-label="Drum grid"
           onKeyDown={onKey}
           data-bars={bars}
           style={{ gridTemplateRows: `${bars > 1 ? "16px " : ""}repeat(${DRUM_VOICES.length}, 1fr) 9px` }}
@@ -190,7 +240,7 @@ export function DrumGrid({
                       data-drum-cell={key}
                       tabIndex={active === key ? 0 : -1}
                       onFocus={() => setActive(key)}
-                      aria-label={`${name}, ${bars > 1 ? `bar ${page + 1}, ` : ""}step ${i + 1}${hit?.accent ? ", accent" : ""}`}
+                      aria-label={`${drumCellLabel(voice, c)}${hit?.accent ? ", accent" : ""}`}
                       aria-selected={!!hit}
                       data-accent={hit?.accent || undefined}
                       data-beat={i % 4 === 0 || undefined}
@@ -216,7 +266,7 @@ export function DrumGrid({
               <i key={c} data-beat={(c - first) % 4 === 0 || undefined} data-filled={pattern.hits.some((h) => h.step === c) || undefined} data-now={(playing && c === here) || undefined} />
             ))}
           </div>
-        </div>
+        </DrumGridRoot>
       </Display>
     </div>
   )

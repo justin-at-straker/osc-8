@@ -68,7 +68,7 @@ function useSoundEnabled() {
 }
 
 function focusDescribe() {
-  document.querySelector<HTMLInputElement>('[data-ai="describe"] input')?.focus()
+  document.querySelector<HTMLElement>('[data-ai="describe"] textarea, [data-ai="describe"] input')?.focus()
 }
 
 /** Every note off: stop the sequencer and release any held keys. */
