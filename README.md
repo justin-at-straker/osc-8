@@ -4,6 +4,8 @@ A browser groovebox: a Serum-style wavetable synth and an 808-style drum machine
 
 **Live:** https://osc-8.vercel.app
 
+![OSC-8 playing the default groove: transport and AI describe field across the top, the synth front panel, and the piano roll](docs/screenshot.png)
+
 ## What it does
 
 - **Wavetable synth:** two oscillators with up to 16-voice unison (detune, blend, stereo spread), sub, noise, a 24 dB low-pass filter, three envelopes, four LFOs and a 16-slot mod matrix. Drag an LFO or envelope handle onto any knob to modulate it.
