@@ -71,7 +71,7 @@ describe("setPatch tool", () => {
 
     const out = secondCallToolOutput(model)
     expect(out.value).toMatchObject({ ok: true, name: "Dark Reese" })
-    expect((out.value as { silentInM1: string[] }).silentInM1).toEqual(expect.arrayContaining(["oscA.unison", "fx.reverb.mix"]))
+    expect((out.value as { silentInM1: string[] }).silentInM1).toEqual(["oscA.unison", "oscA.detune"]) // FX are audible since params 14-38)
   })
 
   it("returns an error result for invalid input and leaves the patch unchanged", async () => {
