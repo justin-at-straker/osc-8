@@ -133,7 +133,7 @@ impl FxChain {
     /// Route an FX parameter. Returns false if `id` is not an FX parameter.
     pub fn set_param(&mut self, id: u32, value: f32) -> bool {
         if !value.is_finite() {
-            return (FX_FIRST..PARAM_COUNT).contains(&id);
+            return (FX_FIRST..BASE_PARAM_COUNT).contains(&id);
         }
         let on = value >= 0.5;
         match id {

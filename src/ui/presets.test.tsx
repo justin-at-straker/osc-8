@@ -81,8 +81,8 @@ describe("PresetBrowser", () => {
   it("picks a preset from the list", () => {
     render(<PresetBrowser />)
     fireEvent.click(screen.getByLabelText("Preset list"))
-    fireEvent.click(screen.getByRole("menuitem", { name: "PD Halo" }))
-    expect(getState().patch.name).toBe("PD Halo")
+    fireEvent.click(screen.getByRole("menuitem", { name: "PD Halo Drift" }))
+    expect(getState().patch.name).toBe("PD Halo Drift")
     expect(getState().patch.env1.attack).toBeGreaterThan(1)
   })
 })

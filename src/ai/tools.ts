@@ -5,12 +5,12 @@
 import { jsonSchema, tool, type ToolSet } from "ai"
 import { z } from "zod"
 import { BUILTIN_TABLES, Patch, type PatchEdit } from "@/engine/patch"
-import { PARAMS } from "@/engine/params"
+import { ALL_PARAM_KEYS, MOD_TARGETS } from "@/engine/params"
 import { editPatch, getState, setPattern, setTransport } from "@/state/store"
 import type { UiAgent } from "./ui-agent"
 
 /** Patch fields the M1 engine actually renders. Everything else validates and is stored, but is silent for now. */
-export const AUDIBLE_PARAMS: readonly string[] = PARAMS.map(([, key]) => key)
+export const AUDIBLE_PARAMS: readonly string[] = ALL_PARAM_KEYS
 
 const SECTION_HINTS: Record<string, string> = {
   name: "Short descriptive patch name, max 64 chars, e.g. 'Dark Detuned Reese'. Always set it.",
@@ -22,11 +22,11 @@ const SECTION_HINTS: Record<string, string> = {
   noise: "Noise source (not audible in M1).",
   filter: "Filter. cutoff in Hz 20..20000 (log-ish: 200 dark, 1000 warm, 4000 open, 12000 bright). resonance 0..1 (0.7+ whistles). enabled toggles it. In M1 only lp24 is rendered.",
   env1: "Amp envelope. attack/decay/release in seconds 0..20, sustain 0..1.",
-  env2: "Envelope 2 (mod source, not audible in M1).",
-  env3: "Envelope 3 (mod source, not audible in M1).",
-  lfos: "Exactly 4 LFOs, full array required (not audible in M1).",
-  mod: "Mod matrix routes, up to 16, full array required (not audible in M1).",
-  fx: "Effects; each effect may be given partially (not audible in M1).",
+  env2: "Envelope 2: a mod source (0..1 per note), audible only through a mod route. Times in seconds.",
+  env3: "Envelope 3: a mod source like env2.",
+  lfos: "Exactly 4 LFOs, full array required. Each: shape sine|triangle|saw|square|random (random = sample & hold), rate Hz when sync is false, sync true uses syncDivision (1/1,1/2,1/4,1/8,1/16,1/4t,1/8t,1/8d; retriggers each note), oneShot runs one cycle. Audible only through mod routes.",
+  mod: `Mod matrix: up to 16 routes, full array required (it replaces the old one; include existing routes you keep). Each { source, target, amount -1..1, aux }. source/aux: none, env1..env3, lfo1..lfo4, velocity, modwheel, note, random. target must be one of: ${Object.keys(MOD_TARGETS).join(", ")}. amount 1 sweeps the target's full range upward from its knob value (cutoff in octaves/log space), so 0.1-0.4 is typical; aux scales the amount by another source (aux "none" = off).`,
+  fx: "Effects; each effect may be given partially. Turn on only what the sound needs.",
   voicing: "Voicing (not audible in M1).",
   master: "Master volume 0..1.",
 }
@@ -110,7 +110,7 @@ export function applySetPatch(input: unknown): SetPatchResult {
 }
 
 const SET_PATCH_DESCRIPTION = `Design a sound by editing the synth patch. Give only what you change; every object level is optional and merges onto the current patch (arrays and oscillator 'table' are replaced whole). All changes apply as one undo step. Units: Hz for cutoff, seconds for envelope times, 0..1 for levels/amounts, integers for octave/semi.
-AUDIBLE IN M1 (focus on these): ${AUDIBLE_PARAMS.join(", ")}. Other fields validate and are saved for later milestones but make no sound yet.
+AUDIBLE NOW: oscA (table, position, level, octave, semi, fine), filter (enabled, cutoff, resonance; rendered as lp24), env1 (amp), env2/env3/lfos via mod routes, the mod matrix, every fx section, master.volume. NOT YET AUDIBLE (saved for later): oscB, sub, noise, unison/detune/blend/spread/warp/pan/phase, filter types other than lp24, voicing.
 Always include a short descriptive 'name'. On { ok: false } read the error, fix the input and call again.`
 
 export function createPatchTools() {

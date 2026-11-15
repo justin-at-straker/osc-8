@@ -2,6 +2,7 @@
 // Runs in AudioWorkletGlobalScope: no DOM, no fetch. The main thread sends the
 // compiled bytes in an "init" message. Keep process() allocation-free.
 import type { FromWorklet, ToWorklet } from "./protocol"
+import type { FromWorkletMod, ToWorkletMod } from "./client"
 
 // AudioWorkletGlobalScope declarations (not in lib.dom).
 declare const sampleRate: number
@@ -24,9 +25,19 @@ type Exports = {
   out_left(): number
   out_right(): number
   current_step(): number
+  set_modwheel(value: number): void
+  mod_active(): number
+  mod_values_ptr(): number
 }
 
+type In = ToWorklet | ToWorkletMod
+type Out = FromWorklet | FromWorkletMod
+
 const BLOCK = 128
+/** Params 0..38 have readback values (see `mod_values_ptr`). */
+const MOD_VALUES = 39
+/** Modulation readback rate. */
+const MOD_HZ = 30
 
 class Osc8Processor extends AudioWorkletProcessor {
   private wasm: Exports | null = null
@@ -34,19 +45,23 @@ class Osc8Processor extends AudioWorkletProcessor {
   private right: Float32Array | null = null
   private buffer: ArrayBuffer | null = null
   private lastStep = -1
+  private modValues: Float32Array | null = null
+  private modWasActive = false
+  private modBlocks = 0
+  private readonly modInterval = Math.max(1, Math.round(sampleRate / MOD_HZ / BLOCK))
   /** Messages that arrive while the module is still instantiating. */
-  private pending: ToWorklet[] = []
+  private pending: In[] = []
 
   constructor() {
     super()
-    this.port.onmessage = (e: MessageEvent<ToWorklet>) => this.receive(e.data)
+    this.port.onmessage = (e: MessageEvent<In>) => this.receive(e.data)
   }
 
-  private post(msg: FromWorklet) {
+  private post(msg: Out) {
     this.port.postMessage(msg)
   }
 
-  private receive(msg: ToWorklet) {
+  private receive(msg: In) {
     if (msg.type === "init") {
       void this.load(msg.wasm)
       return
@@ -79,9 +94,21 @@ class Osc8Processor extends AudioWorkletProcessor {
     this.buffer = wasm.memory.buffer
     this.left = new Float32Array(this.buffer, wasm.out_left(), BLOCK)
     this.right = new Float32Array(this.buffer, wasm.out_right(), BLOCK)
+    this.modValues = new Float32Array(this.buffer, wasm.mod_values_ptr(), MOD_VALUES)
   }
 
-  private handle(wasm: Exports, msg: ToWorklet) {
+  /** At ~30 Hz while any route is live (plus one final message when the last goes away). */
+  private postMod(wasm: Exports) {
+    if (++this.modBlocks < this.modInterval) return
+    this.modBlocks = 0
+    const active = wasm.mod_active() !== 0
+    if (!active && !this.modWasActive) return
+    this.modWasActive = active
+    // slice(): a 156-byte copy ~30x/s; the message clone allocates anyway.
+    this.post({ type: "mod", active, values: this.modValues!.slice() })
+  }
+
+  private handle(wasm: Exports, msg: In) {
     switch (msg.type) {
       case "params":
         for (const [id, value] of msg.params) wasm.set_param(id, value)
@@ -98,6 +125,9 @@ class Osc8Processor extends AudioWorkletProcessor {
         break
       case "noteOff":
         wasm.note_off(msg.note)
+        break
+      case "modwheel":
+        wasm.set_modwheel(msg.value)
         break
       case "init":
         break
@@ -131,6 +161,7 @@ class Osc8Processor extends AudioWorkletProcessor {
       this.lastStep = step
       this.post({ type: "step", step })
     }
+    this.postMod(wasm)
     return true
   }
 }

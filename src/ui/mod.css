@@ -1,0 +1,491 @@
+/* Modulation: handles, drop targets, rings on knobs, the MOD page. */
+:root {
+  --mod-lfo: oklch(0.7 0.16 235);
+  --mod-env: oklch(0.72 0.17 150);
+  --mod-other: oklch(0.66 0.2 310);
+}
+
+[data-family="lfo"] {
+  --mod-c: var(--mod-lfo);
+}
+
+[data-family="env"] {
+  --mod-c: var(--mod-env);
+}
+
+[data-family="other"] {
+  --mod-c: var(--mod-other);
+}
+
+/* Three station keys in the column: a little tighter so they fit the page height. */
+[data-osc-front] > [data-kit="tabs-list"]:not(#_):not(#_):not(#_):not(#_) {
+  gap: 3px;
+  padding-top: 2px;
+}
+
+[data-osc-front] [data-kit="tab"]:not(#_):not(#_):not(#_):not(#_) {
+  gap: 6px;
+}
+
+[data-osc-tab-led][data-family="lfo"][data-on] {
+  background: var(--mod-lfo);
+  box-shadow:
+    0 0 3px var(--mod-lfo),
+    0 0 7px color-mix(in oklab, var(--mod-lfo) 50%, transparent);
+}
+
+/* The arc a routed knob draws from its value to where the routes take it. */
+[data-osc-mod-ring] {
+  & path {
+    fill: none;
+    stroke: var(--mod-c);
+    stroke-width: 4;
+    stroke-linecap: round;
+    opacity: 0.9;
+  }
+
+  & [data-osc-mod-end] {
+    fill: var(--mod-c);
+  }
+
+  & [data-osc-mod-live] {
+    fill: #fff;
+    stroke: var(--mod-c);
+    stroke-width: 1.5;
+  }
+}
+
+/* While a source is dragged, every valid target glows; the one under the pointer brightly. */
+:root[data-osc-mod-dragging] {
+  cursor: grabbing;
+
+  & [data-mod-target] [data-kit="knob-dial"] {
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--mod-c) 45%, transparent);
+  }
+
+  & [data-mod-target] [data-kit="stepper"] {
+    border-radius: 8px;
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--mod-c) 45%, transparent);
+  }
+
+  & [data-mod-target][data-mod-over] :is([data-kit="knob-dial"], [data-kit="stepper"]) {
+    box-shadow:
+      0 0 0 3px var(--mod-c),
+      0 0 14px var(--mod-c);
+  }
+}
+
+:root[data-osc-mod-dragging="lfo"] {
+  --mod-c: var(--mod-lfo);
+}
+
+:root[data-osc-mod-dragging="env"] {
+  --mod-c: var(--mod-env);
+}
+
+/* A source's drag handle: a small key with a cross-arrow grip in the family color. */
+[data-osc-mod-handle] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 22px;
+  min-width: 22px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 6px;
+  font: 600 8px/1 var(--sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in oklab, var(--mod-c), #000 35%);
+  background: linear-gradient(180deg, #fbfbf9, #ececE8);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklab, var(--mod-c) 55%, transparent),
+    0 2px 0 #d3d3ce;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+
+  & [data-osc-grip] {
+    width: 11px;
+    height: 11px;
+    color: var(--mod-c);
+  }
+
+  &[data-dragging] {
+    translate: 0 2px;
+    box-shadow:
+      inset 0 0 0 1px var(--mod-c),
+      0 0 8px color-mix(in oklab, var(--mod-c) 60%, transparent);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mod-c);
+    outline-offset: 2px;
+  }
+}
+
+/* Every handle in the pattern bar, so a source can go straight onto any page's knobs. */
+[data-osc-mod-strip] {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-inline-end: 18px;
+}
+
+[data-osc-mod-strip-legend] {
+  margin-inline-end: 4px;
+  font: var(--legend);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--legend-ink);
+}
+
+[data-osc-mod-ghost] {
+  position: fixed;
+  z-index: 1000;
+  translate: 14px 14px;
+  padding: 5px 9px;
+  border-radius: 6px;
+  border-left: 3px solid var(--mod-c);
+  font: 500 10px/1 var(--mono, monospace);
+  letter-spacing: 0.04em;
+  color: #f4f4f0;
+  background: rgb(20 20 19 / 0.88);
+  box-shadow: 0 6px 16px -6px rgb(0 0 0 / 0.5);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+[data-osc-mod-menu] [data-kit="option"][data-family]::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-inline-end: 8px;
+  border-radius: 50%;
+  background: var(--mod-c);
+}
+
+/* The MOD page: small sub-page keys down its left edge, then the modules. */
+[data-osc-mod] {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+}
+
+[data-osc-subtabs] {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  width: 52px;
+  padding-top: 4px;
+}
+
+[data-osc-subtab] {
+  position: relative;
+  height: 30px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 6px;
+  font: 600 7.5px/1 var(--sans);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dim);
+  background: linear-gradient(180deg, #fbfbf9, #efefeb);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 3px 0 #d6d6d2,
+    0 4px 4px -2px rgb(0 0 0 / 0.12);
+  cursor: pointer;
+  translate: 0 -2px;
+
+  & b {
+    margin-inline-start: 4px;
+    color: var(--mod-lfo);
+  }
+
+  &[aria-selected="true"] {
+    translate: 0;
+    color: var(--ink);
+    background: #e6e6e3;
+    box-shadow:
+      inset 0 1px 2px rgb(0 0 0 / 0.12),
+      0 1px 0 #fff;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--key-color);
+    outline-offset: 2px;
+  }
+}
+
+[data-osc-subpanel] {
+  min-width: 0;
+  outline: none;
+}
+
+[data-osc-lfos] {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+[data-osc-envs] {
+  grid-template-columns: repeat(2, auto);
+  justify-content: start;
+  gap: 8px;
+}
+
+[data-osc-mod-module] {
+  padding-inline: 8px;
+
+  & > h2 {
+    gap: 6px;
+  }
+
+  & > h2 > [data-osc-mod-handle] {
+    order: 3;
+    margin-block: -5px;
+  }
+
+  & [data-osc-shape] {
+    width: 22px;
+    height: 15px;
+
+    & path {
+      fill: none;
+      stroke: var(--mod-c);
+      stroke-width: 1.6;
+      stroke-linejoin: round;
+    }
+  }
+
+  & [data-osc-controls] {
+    gap: 2px;
+  }
+}
+
+[data-osc-lfo-rate] {
+  display: grid;
+  justify-items: center;
+  min-width: 64px;
+}
+
+[data-osc-division] {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding-top: 18px;
+}
+
+/* SYNC and 1-SHOT: switches a size down, their legends under them. */
+[data-osc-lfo-switches] {
+  gap: 4px;
+  padding-top: 2px;
+
+  & [data-osc-switch=""] {
+    gap: 3px;
+    padding: 0;
+
+    & [data-kit="switch"]:not(#_):not(#_) {
+      zoom: 0.72;
+    }
+
+    & [data-kit="switch"]:not(#_):not(#_)::before,
+    & [data-kit="switch"]:not(#_):not(#_)::after {
+      content: none;
+    }
+  }
+}
+
+/* A compact select: an LFO division, a route's aux. */
+[data-osc-select] [data-kit="select-trigger"]:not(#_):not(#_):not(#_) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  width: 64px;
+  height: 26px;
+  padding: 0 6px 0 8px;
+  font-size: 11px;
+  box-sizing: border-box;
+
+  & [data-kit="icon"] svg {
+    width: 12px;
+    height: 12px;
+  }
+}
+
+[data-osc-select-popup] {
+  max-height: min(60vh, 360px);
+  overflow-y: auto;
+}
+
+/* Routes: two columns of compact rows that scroll inside the page height. */
+[data-osc-routes] {
+  min-width: 0;
+
+  & > h2 {
+    font: var(--legend);
+    letter-spacing: 0.18em;
+  }
+}
+
+[data-osc-routes-empty] {
+  display: grid;
+  place-items: center;
+  height: 112px;
+  margin: 0;
+  font: var(--legend);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--legend-ink);
+}
+
+[data-osc-route-list] {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 26px;
+  align-content: start;
+  column-gap: 14px;
+  row-gap: 2px;
+  height: 112px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+[data-osc-route] {
+  display: grid;
+  grid-template-columns: 16px 46px minmax(0, 1fr) 96px 34px 64px 22px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+  border-radius: 5px;
+  font: 500 10px/1 var(--sans);
+  color: var(--ink);
+
+  &[data-selected] {
+    background: color-mix(in oklab, var(--mod-c) 12%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--mod-c) 40%, transparent);
+  }
+
+  & [data-osc-route-n] {
+    font-size: 8px;
+    color: var(--legend-ink);
+  }
+
+  & [data-osc-route-source] {
+    font-weight: 600;
+    color: color-mix(in oklab, var(--mod-c), #000 25%);
+  }
+
+  & [data-osc-route-target] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  & [data-osc-route-value] {
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  & [data-osc-select] [data-kit="select-trigger"]:not(#_):not(#_):not(#_):not(#_) {
+    height: 20px;
+    width: 64px;
+    font-size: 9px;
+  }
+
+  & [data-osc-route-delete][data-kit="button"]:not(#_):not(#_):not(#_) {
+    height: 20px;
+    min-width: 20px;
+    width: 20px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    & svg {
+      width: 11px;
+      height: 11px;
+    }
+  }
+}
+
+/* A bipolar amount slider: zero in the middle, filled from zero to the thumb. */
+[data-osc-amt-control] {
+  display: flex;
+  align-items: center;
+  height: 18px;
+  touch-action: none;
+  cursor: ew-resize;
+}
+
+[data-osc-amt-track] {
+  position: relative;
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: rgb(0 0 0 / 0.12);
+  box-shadow: inset 0 1px 1px rgb(0 0 0 / 0.15);
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(50% + min(0, var(--amt)) * 50%);
+    width: calc(abs(var(--amt)) * 50%);
+    border-radius: 2px;
+    background: var(--mod-c);
+  }
+
+  &::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: -3px;
+    bottom: -3px;
+    width: 1px;
+    background: rgb(0 0 0 / 0.25);
+  }
+}
+
+[data-osc-amt-thumb] {
+  position: absolute;
+  top: 50%;
+  left: var(--slider-thumb-position);
+  width: 10px;
+  height: 14px;
+  border-radius: 3px;
+  background: #fafaf7;
+  box-shadow:
+    inset 0 0 0 1px #bdbdb7,
+    0 1px 0 #b5b5af;
+  translate: -50% -50%;
+
+  &:has(:focus-visible) {
+    outline: 2px solid var(--mod-c);
+    outline-offset: 1px;
+  }
+}
+
+/* Every module header is one printed line tall, whatever sits in it (a power
+   switch, a drag handle, a shape sketch), so all pages share one height. */
+[data-osc-module] > h2 {
+  height: 7px;
+  overflow: visible;
+}
+
+/* Shorter station keys, so SYNTH, FX and MOD stack with their legends clear. */
+[data-osc-front][data-kit="tabs"]:not(#_):not(#_):not(#_) {
+  --cap: 24px;
+}
+
+[data-osc-front] > [data-kit="tabs-list"]:not(#_):not(#_):not(#_):not(#_) {
+  gap: 6px;
+}

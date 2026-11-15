@@ -4,8 +4,10 @@
 
 pub mod dsp;
 pub mod engine;
+pub mod envelope;
 pub mod fx;
 pub mod instrument;
+pub mod modulation;
 pub mod params;
 pub mod sequencer;
 pub mod synth;
@@ -108,4 +110,28 @@ pub extern "C" fn out_right() -> *const f32 {
 #[no_mangle]
 pub extern "C" fn current_step() -> i32 {
     engine().map(|e| e.sequencer.current_step()).unwrap_or(-1)
+}
+
+/// Mod wheel, 0..1 (a modulation source; no MIDI CC input yet).
+#[no_mangle]
+pub extern "C" fn set_modwheel(value: f32) {
+    if let Some(e) = engine() {
+        e.set_modwheel(value);
+    }
+}
+
+/// 1 while any modulation route is live (valid source + target, amount != 0).
+#[no_mangle]
+pub extern "C" fn mod_active() -> u32 {
+    engine().map(|e| e.mod_active() as u32).unwrap_or(0)
+}
+
+/// Pointer to 39 f32: the current effective value of params 0..38 (knob value plus
+/// modulation from the most recent note, clamped). Untargeted params hold their knob value.
+#[no_mangle]
+pub extern "C" fn mod_values_ptr() -> *const f32 {
+    match engine() {
+        Some(e) => e.mod_values.as_ptr(),
+        None => SILENCE.as_ptr(),
+    }
 }

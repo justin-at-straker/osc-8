@@ -9,10 +9,20 @@ export { useQwertyKeyboard } from "./use-qwerty-keyboard"
 export { useUndoKeys } from "./use-undo-keys"
 export { OscPage } from "./osc-page"
 export { Knob, type KnobProps } from "./knob"
-export { DEMO_PATTERN } from "./pattern-presets"
+export { DEMO_BPM, DEMO_PATTERN } from "./pattern-presets"
 export { AppMenubar, type AppMenubarProps } from "./app-menubar"
 export { FrontPanel, type FrontPage } from "./front-panel"
 export { FxPanel } from "./fx-panel"
 export { PresetBrowser } from "./preset-browser"
-export { FACTORY_PRESETS, PRESET_CATEGORIES, type PresetCategory } from "./presets"
+export { DEFAULT_PRESET_ID, FACTORY_PRESETS, PRESET_CATEGORIES, type PresetCategory } from "./presets"
 export { loadPreset, loadPresetById, stepPreset, isModified, usePatchStatus, PRESETS_BY_CATEGORY } from "./preset-state"
+export { ModPanel, type ModPage } from "./mod-panel"
+export { ModHandle, ModSourceStrip, ModTargetArea, ModDragGhost } from "./mod-ui"
+export { beginModDrag, useModDrag, SPRING_MS } from "./mod-drag"
+export {
+  addRoute, removeRoute, clearTarget, setRouteAmount, setRouteAux, selectRoute, useSelectedRoute,
+  MAX_ROUTES, DEFAULT_AMOUNT, SOURCE_LABELS, TARGET_LABELS, HANDLE_SOURCES, MENU_SOURCES, sourceFamily, isModTarget,
+  type ModSource, type ModFamily, type Route,
+} from "./mod-model"
+export { setLiveModValues, useLiveModValue } from "./mod-live"
+export { CompactSelect } from "./compact-select"

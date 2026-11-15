@@ -1,5 +1,5 @@
 //! Native render-time benchmark: `cargo run --release --example bench --manifest-path engine/Cargo.toml`
-//! 8 held voices on the saw frame, 128-frame blocks at 48 kHz, FX off vs each FX vs all FX on.
+//! 8 held voices on the saw frame, 128-frame blocks at 48 kHz: FX off / each FX / all FX, and 16 mod routes.
 use osc8_engine::engine::Engine;
 use osc8_engine::params::*;
 use std::time::Instant;
@@ -48,4 +48,24 @@ fn main() {
     bench("eq", &eq);
     let all: Vec<_> = [&dist[..], &chorus, &delay, &reverb, &ott, &eq].concat();
     bench("all fx on", &all);
+
+    // 16 live mod routes from fast LFOs/envs onto voice and global targets.
+    let targets = [
+        OSC_A_POSITION, OSC_A_LEVEL, OSC_A_SEMI, OSC_A_FINE, FILTER_CUTOFF, FILTER_RESONANCE, MASTER_VOLUME,
+        FX_DIST_DRIVE, FX_DIST_MIX, FX_CHORUS_MIX, FX_DELAY_MIX, FX_DELAY_FEEDBACK, FX_REVERB_MIX, FX_REVERB_SIZE,
+        FX_OTT_DEPTH, FX_EQ_LOW,
+    ];
+    let mut routes = Vec::new();
+    for i in 0..4u32 {
+        let b = LFO_BASE + i * LFO_STRIDE;
+        routes.extend([(b + LFO_SHAPE, i as f32), (b + LFO_SYNC, 0.0), (b + LFO_RATE, 20.0 + 10.0 * i as f32)]);
+    }
+    for (s, &t) in targets.iter().enumerate() {
+        let b = MOD_BASE + s as u32 * MOD_STRIDE;
+        let source = [4.0, 5.0, 6.0, 7.0, 2.0][s % 5];
+        routes.extend([(b + MOD_SOURCE, source), (b + MOD_TARGET, t as f32), (b + MOD_AMOUNT, 0.3), (b + MOD_AUX, if s % 2 == 0 { 8.0 } else { 0.0 })]);
+    }
+    bench("16 routes", &routes);
+    let all_mod: Vec<_> = [&all[..], &routes].concat();
+    bench("16 routes+fx", &all_mod);
 }

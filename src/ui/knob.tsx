@@ -12,9 +12,32 @@ import { fromTravel, LINEAR, snap, toTravel, type Taper } from "./taper"
 const knobTicks = 27
 const litTicks = (travel: number) => Math.floor(travel * knobTicks)
 
-function KnobTicks({ lit }: { lit: number }) {
+/** A point on the dial's ring, radius r, at travel t (0..1 over the 270deg sweep). */
+function ringPoint(t: number, r: number) {
+  const angle = ((-135 + t * 270 - 90) * Math.PI) / 180
+  return [Math.cos(angle) * r, Math.sin(angle) * r] as const
+}
+
+/** The mod arc: from the knob's value to where its routes take it, and the live value as a dot. */
+function ModRing({ from, to, family, live }: KnobRing & { from: number; live?: number }) {
+  const r = 46
+  const [x0, y0] = ringPoint(from, r)
+  const [x1, y1] = ringPoint(to, r)
+  const sweep = Math.abs(to - from) * 270
+  const d = sweep < 0.5 ? "" : `M ${x0} ${y0} A ${r} ${r} 0 ${sweep > 180 ? 1 : 0} ${to > from ? 1 : 0} ${x1} ${y1}`
+  const dot = live === undefined ? null : ringPoint(live, r)
   return (
-    <svg data-kit="knob-ticks" viewBox="-50 -50 100 100" aria-hidden>
+    <g data-osc-mod-ring data-family={family}>
+      {d && <path d={d} />}
+      <circle data-osc-mod-end cx={x1} cy={y1} r={2.6} />
+      {dot && <circle data-osc-mod-live cx={dot[0]} cy={dot[1]} r={3.2} />}
+    </g>
+  )
+}
+
+function KnobTicks({ lit, ring, travel, live }: { lit: number; ring?: KnobRing; travel: number; live?: number }) {
+  return (
+    <svg data-kit="knob-ticks" viewBox="-50 -50 100 100" aria-hidden overflow="visible">
       {Array.from({ length: knobTicks + 1 }, (_, i) => {
         const angle = ((-135 + (i / knobTicks) * 270 - 90) * Math.PI) / 180
         return (
@@ -29,8 +52,16 @@ function KnobTicks({ lit }: { lit: number }) {
           />
         )
       })}
+      {ring && <ModRing {...ring} from={travel} live={live} />}
     </svg>
   )
+}
+
+/** Modulation drawn on a knob, all in travel (0..1 of the knob's turn). */
+export type KnobRing = {
+  /** Where the routes take the value. */
+  to: number
+  family: "lfo" | "env" | "other"
 }
 
 export type KnobProps = {
@@ -54,6 +85,16 @@ export type KnobProps = {
   onValueChange: (value: number) => void
   /** Printed readout, for units Intl can't format (dB, Hz). The input still holds the number; this shows while it isn't focused. */
   displayValue?: (value: number) => string
+  /** Modulation to draw on the tick ring. */
+  ring?: KnobRing
+  /** The engine's live modulated value (same units as `value`), drawn as a moving dot on the ring. */
+  liveValue?: number
+  /**
+   * Drag on the ring (or Alt+drag anywhere on the dial) to set modulation
+   * depth instead of the value. `begin` is called on press; `move` with the
+   * travel moved since, up positive.
+   */
+  ringDrag?: { begin(): void; move(deltaTravel: number): void }
 }
 
 /** Drag sensitivity: pixels of vertical travel for the whole turn. */
@@ -73,6 +114,9 @@ export function Knob({
   resetValue,
   onValueChange,
   displayValue,
+  ring,
+  ringDrag,
+  liveValue,
 }: KnobProps) {
   const travel = toTravel(value, min, max, taper)
   // The last value sent, so a drag doesn't resend the same value and knows where it is between renders.
@@ -91,18 +135,27 @@ export function Knob({
   const toTravelValue = (t: number) => fromTravel(t, min, max, taper)
 
   // Drag up/down on the dial: travel, not value, so every taper feels even.
-  const drag = React.useRef<{ y: number; travel: number; id: number } | null>(null)
+  const drag = React.useRef<{ y: number; travel: number; id: number; ring: boolean } | null>(null)
   const onPointerDown = (event: React.PointerEvent<HTMLSpanElement>) => {
     if (event.button !== 0) return
     event.preventDefault()
     event.currentTarget.setPointerCapture?.(event.pointerId)
-    drag.current = { y: event.clientY, travel: latest.current.travel, id: event.pointerId }
+    // On the outer ring (the ticks) or with Alt: the mod depth, when there is one.
+    const box = event.currentTarget.getBoundingClientRect()
+    const dx = event.clientX - (box.left + box.width / 2)
+    const dy = event.clientY - (box.top + box.height / 2)
+    const onRing = box.width > 0 && Math.hypot(dx, dy) > box.width * 0.4
+    const ringMode = !!ringDrag && !!ring && (event.altKey || onRing)
+    if (ringMode) ringDrag.begin()
+    drag.current = { y: event.clientY, travel: latest.current.travel, id: event.pointerId, ring: ringMode }
   }
   const onPointerMove = (event: React.PointerEvent<HTMLSpanElement>) => {
     const d = drag.current
     if (!d || d.id !== event.pointerId) return
     const fine = event.shiftKey ? 0.2 : 1
-    commit(toTravelValue(d.travel + ((d.y - event.clientY) / FULL_TURN_PX) * fine))
+    const moved = ((d.y - event.clientY) / FULL_TURN_PX) * fine
+    if (d.ring) ringDrag?.move(moved)
+    else commit(toTravelValue(d.travel + moved))
   }
   const endDrag = () => (drag.current = null)
 
@@ -134,6 +187,7 @@ export function Knob({
       <div
         data-kit="knob"
         data-color={color}
+        data-modulated={ring ? ring.family : undefined}
         style={{ "--turn": `${travel * 270 - 135}deg`, "--lit": travel } as React.CSSProperties}
       >
         <span
@@ -146,7 +200,12 @@ export function Knob({
           onPointerCancel={endDrag}
           onDoubleClick={() => resetValue !== undefined && commit(resetValue)}
         >
-          <KnobTicks lit={litTicks(travel)} />
+          <KnobTicks
+            lit={litTicks(travel)}
+            ring={ring}
+            travel={travel}
+            live={ring && liveValue !== undefined ? toTravel(liveValue, min, max, taper) : undefined}
+          />
           <span data-kit="knob-cap" />
         </span>
         {displayValue ? (

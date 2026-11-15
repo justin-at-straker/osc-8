@@ -111,7 +111,6 @@ export type DeepPartial<T> = T extends unknown[] ? T : T extends object ? { [K i
 export function setPatchValue(path: string, value: unknown, source: Source = "user") {
   const now = Date.now()
   const continuing = lastGesture.path === path && lastGesture.source === source && now - lastGesture.at < GESTURE_MS
-  lastGesture = { path, source, at: now }
   const [section, ...rest] = path.split(".")
   const edit = rest.length === 0 ? { [section]: value } : (() => {
     const current = structuredClone((state.patch as Record<string, unknown>)[section]) as Record<string, unknown>
@@ -120,13 +119,27 @@ export function setPatchValue(path: string, value: unknown, source: Source = "us
     node[rest[rest.length - 1]] = value
     return { [section]: current }
   })()
-  if (!continuing) return editPatch(edit as PatchEdit, source)
+  // The gesture mark is set after editPatch, which clears it for discrete edits.
+  if (!continuing) {
+    const next = editPatch(edit as PatchEdit, source)
+    lastGesture = { path, source, at: now }
+    return next
+  }
   // Same gesture: apply without a new undo entry.
   const next = Patch.parse(deepMerge(state.patch, edit))
+  lastGesture = { path, source, at: now }
   lastSource = source
   state = { ...state, patch: next }
   emit()
   return next
+}
+
+/** Forget undo/redo history, e.g. after the startup preset and pattern are loaded. */
+export function resetHistory() {
+  past.length = 0
+  future.length = 0
+  lastGesture.at = 0
+  emit()
 }
 
 export function canUndo() {

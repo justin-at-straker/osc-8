@@ -5,10 +5,12 @@ import { AudioGate } from "./audio-gate"
 import { PianoRoll } from "./piano-roll"
 import { FrontPanel } from "./front-panel"
 import { PresetBrowser } from "./preset-browser"
+import { ModSourceStrip } from "./mod-ui"
 import { Transport } from "./transport"
 import { useQwertyKeyboard } from "./use-qwerty-keyboard"
 import type { EngineControls } from "./types"
 import "./osc.css"
+import "./mod.css"
 
 /**
  * The M1 instrument: one device with the transport and the AI slot across the
@@ -49,7 +51,7 @@ export function OscPage({
           <div data-osc-ai-slot>{aiSlot}</div>
         </div>
         <FrontPanel />
-        <PianoRoll />
+        <PianoRoll barSlot={<ModSourceStrip />} />
         {showHints && (
           <p data-osc-hint aria-hidden>
             A-K play · Z/X octave · Space play · Ctrl+Z undo · drag a note to lengthen

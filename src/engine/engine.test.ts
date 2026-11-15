@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { beforeAll, describe, expect, it } from "vitest"
 import { defaultPatch } from "./patch"
-import { PARAMS, patchToParams } from "./params"
+import { PARAMS, paramId, patchToParams } from "./params"
 
 type Exports = {
   memory: WebAssembly.Memory
@@ -19,6 +19,9 @@ type Exports = {
   out_left(): number
   out_right(): number
   current_step(): number
+  set_modwheel(value: number): void
+  mod_active(): number
+  mod_values_ptr(): number
 }
 
 const SR = 48000
@@ -260,5 +263,76 @@ describe("osc8.wasm FX chain (ids 14..38)", () => {
     const low = await sine(() => {}, 33)()
     const boosted = await sine((p) => (p.fx.eq = { enabled: true, low: 12, mid: 0, high: 0 }), 33)()
     expect(rms(boosted)).toBeGreaterThan(rms(low) * 2)
+  })
+})
+
+describe("osc8.wasm modulation (ids 39..130)", () => {
+  const modValues = (e: Exports) => new Float32Array(e.memory.buffer, e.mod_values_ptr(), 39)
+
+  it("the default patch has no live routes and reads back knob values", async () => {
+    const e = await withPatch(defaultPatch())
+    renderStereo(e, 4)
+    expect(e.mod_active()).toBe(0)
+    const v = modValues(e)
+    expect(v[paramId("filter.cutoff")]).toBe(4000)
+    expect(v[paramId("master.volume")]).toBeCloseTo(0.7, 6)
+  })
+
+  it("a synced LFO on cutoff (via patchToParams) moves the readback at 1/4 = 0.5 s", async () => {
+    const p = defaultPatch()
+    p.lfos[1] = { shape: "sine", rate: 1, sync: true, syncDivision: "1/4", oneShot: false }
+    p.mod = [{ source: "lfo2", target: "filter.cutoff", amount: 0.2, aux: "none" }]
+    const e = await withPatch(p)
+    e.set_transport(0, 120)
+    expect(e.mod_active()).toBe(1)
+    e.note_on(48, 1)
+    const id = paramId("filter.cutoff")
+    const trace: number[] = []
+    for (let b = 0; b < 750; b++) {
+      e.process(128)
+      trace.push(modValues(e)[id]) // 2 s at 128-frame resolution
+    }
+    const peaks = trace.flatMap((v, i) => (i > 0 && i < trace.length - 1 && v > trace[i - 1] && v >= trace[i + 1] ? [i] : []))
+    expect(peaks.length).toBeGreaterThanOrEqual(3)
+    for (let k = 1; k < peaks.length; k++) expect(((peaks[k] - peaks[k - 1]) * 128) / SR).toBeCloseTo(0.5, 1)
+    // log-space range: base 4000 * 1000^(+-0.2)
+    expect(Math.max(...trace)).toBeCloseTo(4000 * 1000 ** 0.2, -2)
+    expect(Math.min(...trace)).toBeCloseTo(4000 * 1000 ** -0.2, -1)
+  })
+
+  it("modwheel is a source; LFO -> fx.reverb.mix modulates a global target", async () => {
+    const p = defaultPatch()
+    p.lfos[0] = { shape: "triangle", rate: 4, sync: false, syncDivision: "1/4", oneShot: false }
+    p.mod = [
+      { source: "modwheel", target: "oscA.position", amount: 0.5, aux: "none" },
+      { source: "lfo1", target: "fx.reverb.mix", amount: 0.3, aux: "none" },
+    ]
+    const e = await withPatch(p)
+    e.note_on(60, 1)
+    renderStereo(e, 4)
+    expect(modValues(e)[paramId("oscA.position")]).toBe(0)
+    e.set_modwheel(1)
+    renderStereo(e, 4)
+    expect(modValues(e)[paramId("oscA.position")]).toBeCloseTo(0.5, 5)
+    const mix: number[] = []
+    for (let b = 0; b < 100; b++) {
+      e.process(128)
+      mix.push(modValues(e)[paramId("fx.reverb.mix")])
+    }
+    expect(Math.max(...mix) - Math.min(...mix)).toBeGreaterThan(0.4)
+  })
+
+  it("master volume is applied after the FX: the reverb tail stops at volume 0", async () => {
+    const p = blipPatch()
+    p.fx.reverb = { enabled: true, size: 0.8, decay: 0.9, damping: 0.3, mix: 0.5 }
+    const e = await withPatch(p)
+    e.note_on(60, 1)
+    renderStereo(e, 4)
+    e.note_off(60)
+    renderStereo(e, 60)
+    expect(rms(renderStereo(e, 20)[0])).toBeGreaterThan(1e-3)
+    e.set_param(paramId("master.volume"), 0)
+    renderStereo(e, 40)
+    expect(rms(renderStereo(e, 20)[0])).toBe(0)
   })
 })

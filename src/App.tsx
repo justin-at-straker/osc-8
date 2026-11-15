@@ -1,13 +1,21 @@
 import { useEffect, useMemo, useState } from "react"
-import { getState } from "@/state/store"
+import { getState, resetHistory, setPattern, setTransport } from "@/state/store"
 import { Hardware } from "@/components/ui/hardware"
 import { Toasts, notify } from "@/components/ui/toaster"
 import { DescribeField, KeySettings } from "@/ai"
 import { EngineClient } from "@/engine/client"
 import { startAudio } from "@/engine/bridge"
-import { AppMenubar, OscPage, type EngineControls } from "@/ui"
+import { connectLiveMod } from "@/engine/live-mod"
+import { AppMenubar, DEFAULT_PRESET_ID, DEMO_BPM, DEMO_PATTERN, OscPage, loadPresetById, type EngineControls } from "@/ui"
 
 const client = new EngineClient()
+connectLiveMod()
+
+// Start on a warm keys sound playing a familiar melody, with a clean undo history.
+loadPresetById(DEFAULT_PRESET_ID)
+setPattern(DEMO_PATTERN, "load")
+setTransport({ bpm: DEMO_BPM })
+resetHistory()
 
 export function App() {
   const [keysOpen, setKeysOpen] = useState(false)

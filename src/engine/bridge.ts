@@ -1,5 +1,6 @@
 // Store -> engine bridge. Subscribes to the app store and forwards only what
 // changed to the worklet; writes the engine's playhead back into the store.
+import { useSyncExternalStore } from "react"
 import { getState, setAudio, setStep, subscribe, type State } from "@/state/store"
 import type { EngineClient } from "./client"
 import { patchToParams } from "./params"
@@ -38,11 +39,44 @@ export function connectEngine(client: EngineClient): () => void {
     }
   })
   const offStep = client.onStep(setStep)
+  const offMod = client.onMod(setModValues)
 
   return () => {
     unsubscribe()
     offStep()
+    offMod()
+    setModValues(null)
   }
+}
+
+// ---- Modulation readback (not part of undo or the patch store) ----
+
+let modValues: Float32Array | null = null
+const modListeners = new Set<() => void>()
+
+function setModValues(values: Float32Array | null) {
+  modValues = values
+  for (const l of modListeners) l()
+}
+
+/** Latest effective values of params 0..38 (indexed by param id), or null when no mod route is live. */
+export function getModValues(): Float32Array | null {
+  return modValues
+}
+
+export function subscribeModValues(listener: () => void): () => void {
+  modListeners.add(listener)
+  return () => {
+    modListeners.delete(listener)
+  }
+}
+
+/**
+ * The current modulated value of one param (by id, see params.ts), or null when
+ * no route is live. Re-renders only when that value changes (~30 Hz max).
+ */
+export function useModValue(id: number): number | null {
+  return useSyncExternalStore(subscribeModValues, () => (modValues && id >= 0 && id < modValues.length ? modValues[id] : null))
 }
 
 const connections = new WeakMap<EngineClient, () => void>()

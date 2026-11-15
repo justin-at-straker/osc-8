@@ -2,22 +2,25 @@ import * as React from "react"
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@ui-sdk/react/tabs"
 import { useStore } from "@/state/store"
 import { FxPanel } from "./fx-panel"
+import { ModPanel } from "./mod-panel"
+import { ModDragGhost } from "./mod-ui"
 import { SynthPanel } from "./synth-panel"
 import { useUndoKeys } from "./use-undo-keys"
 
-export type FrontPage = "synth" | "fx"
+export type FrontPage = "synth" | "fx" | "mod"
 
 /**
- * The front panel: SYNTH and FX pages behind the kit's station-key tabs,
+ * The front panel: SYNTH, FX and MOD pages behind the kit's station-key tabs,
  * stood on end down the left so the pages don't cost the roll any height.
  * Both pages stay mounted, so the UI SDK agent can reach any knob from either.
- * The FX key carries an LED, lit while any effect is on.
+ * The FX key carries an LED, lit while any effect is on; the MOD key's lights while any route exists.
  */
 export function FrontPanel({ page, onPageChange }: { page?: FrontPage; onPageChange?: (page: FrontPage) => void }) {
   useUndoKeys()
   const [own, setOwn] = React.useState<FrontPage>("synth")
   const value = page ?? own
   const fxOn = useStore((s) => Object.values(s.patch.fx).some((fx) => fx.enabled))
+  const routes = useStore((s) => s.patch.mod.length)
 
   return (
     <Tabs
@@ -38,6 +41,10 @@ export function FrontPanel({ page, onPageChange }: { page?: FrontPage; onPageCha
           FX
           <i data-osc-tab-led data-on={fxOn || undefined} aria-hidden />
         </TabsTab>
+        <TabsTab value="mod" data-kit="tab" aria-description={routes ? `${routes} routes` : undefined}>
+          Mod
+          <i data-osc-tab-led data-on={routes > 0 || undefined} data-family="lfo" aria-hidden />
+        </TabsTab>
       </TabsList>
       <TabsPanel value="synth" data-kit="tab-panel" keepMounted>
         <SynthPanel />
@@ -45,6 +52,10 @@ export function FrontPanel({ page, onPageChange }: { page?: FrontPage; onPageCha
       <TabsPanel value="fx" data-kit="tab-panel" keepMounted>
         <FxPanel />
       </TabsPanel>
+      <TabsPanel value="mod" data-kit="tab-panel" keepMounted>
+        <ModPanel />
+      </TabsPanel>
+      <ModDragGhost />
     </Tabs>
   )
 }

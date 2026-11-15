@@ -5,16 +5,55 @@ import { haptic } from "@/lib/haptics"
 import { Icon } from "@/components/ui/icon"
 import { ModeDial } from "@/components/ui/mode-dial"
 import { SlideSwitch } from "@/components/ui/slide-switch"
+import * as React from "react"
+import { getState, useStore } from "@/state/store"
 import { Knob, type KnobProps } from "./knob"
+import { fromModSpace, isModTarget, parseSummary, routeSummary, setRouteAmount, toModSpace } from "./mod-model"
+import { useLiveModValue } from "./mod-live"
+import { ModTargetArea } from "./mod-ui"
+import { LINEAR, toTravel } from "./taper"
 import { usePatchValue, writePatchValue } from "./use-patch"
 
 // Store-bound controls. Each wraps a SPEC-01 skin (or the same markup, where
 // the kit's version is uncontrolled) and carries `data-param` with its patch path.
 
-/** A knob bound to a numeric patch field. */
-export function ParamKnob({ param, ...props }: Omit<KnobProps, "value" | "onValueChange" | "param"> & { param: string }) {
+type ParamKnobProps = Omit<KnobProps, "value" | "onValueChange" | "param" | "ring" | "ringDrag"> & { param: string }
+
+/** A knob bound to a numeric patch field. Mod targets also take drops, a "Modulate with" menu, and draw their routes. */
+export function ParamKnob(props: ParamKnobProps) {
+  return isModTarget(props.param) ? <ModulatedKnob {...props} /> : <PlainKnob {...props} />
+}
+
+function PlainKnob({ param, ...props }: ParamKnobProps) {
   const value = usePatchValue<number>(param)
   return <Knob {...props} param={param} value={value} onValueChange={(next) => writePatchValue(param, next)} />
+}
+
+function ModulatedKnob({ param, ...props }: ParamKnobProps) {
+  const value = usePatchValue<number>(param)
+  const summary = parseSummary(useStore((s) => routeSummary(s.patch.mod, param)))
+  const live = useLiveModValue(param)
+  const taper = props.taper ?? LINEAR
+
+  // Where the routes take the value: in the target's mod range (log for cutoff), back to knob travel.
+  const ring = summary
+    ? { to: toTravel(fromModSpace(param, toModSpace(param, value) + summary.sum), props.min, props.max, taper), family: summary.family }
+    : undefined
+  // Ring drags adjust the newest route into this knob, from its amount at the press.
+  const last = summary?.last ?? -1
+  const ringDrag = React.useMemo(() => {
+    if (last < 0) return undefined
+    const press = { amount: 0 }
+    return {
+      begin: () => void (press.amount = getState().patch.mod[last]?.amount ?? 0),
+      move: (delta: number) => setRouteAmount(last, press.amount + delta),
+    }
+  }, [last])
+  return (
+    <ModTargetArea target={param}>
+      <Knob {...props} param={param} value={value} ring={ring} ringDrag={ringDrag} liveValue={live} onValueChange={(next) => writePatchValue(param, next)} />
+    </ModTargetArea>
+  )
 }
 
 /** The kit's Stepper, controlled: minus, a readout, plus. For whole numbers like octave or note length. */
@@ -71,7 +110,7 @@ export function StepperControl({
   )
 }
 
-/** A stepper bound to a whole-number patch field. */
+/** A stepper bound to a whole-number patch field (a drop target too, when it's modulatable, like semitone). */
 export function ParamStepper({
   param,
   ...props
@@ -84,7 +123,8 @@ export function ParamStepper({
   signed?: boolean
 }) {
   const value = usePatchValue<number>(param)
-  return <StepperControl {...props} param={param} value={value} onValueChange={(next) => writePatchValue(param, next)} />
+  const stepper = <StepperControl {...props} param={param} value={value} onValueChange={(next) => writePatchValue(param, next)} />
+  return isModTarget(param) ? <ModTargetArea target={param}>{stepper}</ModTargetArea> : stepper
 }
 
 /** An on/off switch bound to a boolean patch field. */

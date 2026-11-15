@@ -59,7 +59,8 @@ fn param_ids_match_params_ts() {
     for (i, id) in ids.iter().enumerate() {
         assert_eq!(*id as usize, i);
     }
-    assert_eq!(PARAM_COUNT as usize, ids.len());
+    assert_eq!(BASE_PARAM_COUNT as usize, ids.len());
+    assert_eq!(PARAM_COUNT, 131);
 }
 
 #[test]

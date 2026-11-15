@@ -88,5 +88,32 @@ pub const FX_EQ_HIGH: u32 = 38;
 /// First FX parameter ID.
 pub const FX_FIRST: u32 = FX_DIST_ENABLED;
 
+/// Plain (non-modulation) parameters are IDs 0..BASE_PARAM_COUNT; mod targets live here.
+pub const BASE_PARAM_COUNT: u32 = 39;
+
+// Modulation (IDs 39..130). Generated in params.ts; mirrored as bases + strides.
+
+/// LFO `i` (0..4) at `LFO_BASE + i * LFO_STRIDE`: shape, rate, sync, syncDivision, oneShot.
+pub const LFO_BASE: u32 = 39;
+pub const LFO_STRIDE: u32 = 5;
+pub const LFO_COUNT: u32 = 4;
+/// LFO field offsets.
+pub const LFO_SHAPE: u32 = 0; // LFO_SHAPES index: sine, triangle, saw, square, random
+pub const LFO_RATE: u32 = 1; // Hz 0.01..50 (free-running)
+pub const LFO_SYNC: u32 = 2; // 0/1
+pub const LFO_DIVISION: u32 = 3; // 1/1, 1/2, 1/4, 1/8, 1/16, 1/4t, 1/8t, 1/8d
+pub const LFO_ONE_SHOT: u32 = 4; // 0/1
+/// env2 at ENV_BASE..+4, env3 at ENV_BASE+4..+8 (attack, decay, sustain, release; env1 units).
+pub const ENV_BASE: u32 = 59;
+pub const ENV_STRIDE: u32 = 4;
+/// Mod slot `s` (0..16) at `MOD_BASE + s * MOD_STRIDE`: source, target, amount, aux.
+pub const MOD_BASE: u32 = 67;
+pub const MOD_STRIDE: u32 = 4;
+pub const MOD_SLOTS: u32 = 16;
+pub const MOD_SOURCE: u32 = 0; // MOD_SOURCES index
+pub const MOD_TARGET: u32 = 1; // param ID, -1 = none
+pub const MOD_AMOUNT: u32 = 2; // -1..1
+pub const MOD_AUX: u32 = 3; // MOD_SOURCES index; scales amount by the aux source (0..1)
+
 /// Number of parameter IDs this engine understands.
-pub const PARAM_COUNT: u32 = 39;
+pub const PARAM_COUNT: u32 = MOD_BASE + MOD_SLOTS * MOD_STRIDE; // 131

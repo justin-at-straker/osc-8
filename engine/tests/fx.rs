@@ -87,7 +87,7 @@ fn synth_events() -> Vec<(usize, Event)> {
 #[test]
 fn every_param_id_is_routed() {
     let mut c = FxChain::new(SR);
-    for id in FX_FIRST..PARAM_COUNT {
+    for id in FX_FIRST..BASE_PARAM_COUNT {
         assert!(c.set_param(id, 0.0), "fx id {id}");
     }
     for id in 0..FX_FIRST {

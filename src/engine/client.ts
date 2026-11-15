@@ -9,11 +9,27 @@ import wasmUrl from "./osc8.wasm?url"
 
 export type StepListener = (step: number) => void
 
+// Messages not yet in protocol.ts (the lead will move them there).
+/** Main thread -> worklet: mod wheel position, 0..1. */
+/** @deprecated now part of ToWorklet in protocol.ts */
+export type ToWorkletMod = Extract<ToWorklet, { type: "modwheel" }>
+/**
+ * Worklet -> main thread, ~30 Hz while any mod route is live, plus one final
+ * message with `active: false` when the last route goes away.
+ * `values[id]` is the current effective value of param `id` (0..38) in its
+ * engineering units: knob value plus modulation from the most recently
+ * triggered note, clamped to the target range. Untargeted params hold their knob value.
+ */
+/** @deprecated now part of FromWorklet in protocol.ts */
+export type FromWorkletMod = Extract<FromWorklet, { type: "mod" }>
+export type ModListener = (values: Float32Array | null) => void
+
 export class EngineClient {
   private ctx: AudioContext | null = null
   private node: AudioWorkletNode | null = null
   private starting: Promise<void> | null = null
   private stepListeners = new Set<StepListener>()
+  private modListeners = new Set<ModListener>()
 
   /** The running AudioContext, once started. */
   get context(): AudioContext | null {
@@ -61,11 +77,12 @@ export class EngineClient {
       outputChannelCount: [2],
     })
     const ready = new Promise<void>((resolve, reject) => {
-      node.port.onmessage = (e: MessageEvent<FromWorklet>) => {
+      node.port.onmessage = (e: MessageEvent<FromWorklet | FromWorkletMod>) => {
         const msg = e.data
         if (msg.type === "ready") resolve()
         else if (msg.type === "error") reject(new Error(`osc8 engine: ${msg.message}`))
         else if (msg.type === "step") for (const cb of this.stepListeners) cb(msg.step)
+        else if (msg.type === "mod") for (const cb of this.modListeners) cb(msg.active ? msg.values : null)
       }
       node.onprocessorerror = () => reject(new Error("osc8 engine: processor error"))
     })
@@ -75,7 +92,7 @@ export class EngineClient {
     await ready
   }
 
-  private post(msg: ToWorklet, transfer: Transferable[] = []) {
+  private post(msg: ToWorklet | ToWorkletMod, transfer: Transferable[] = []) {
     this.node?.port.postMessage(msg, transfer)
   }
 
@@ -106,6 +123,23 @@ export class EngineClient {
     return () => {
       this.stepListeners.delete(cb)
     }
+  }
+
+  /**
+   * Subscribe to modulated param values (~30 Hz while any mod route is live).
+   * `values[id]` is param `id`'s effective value (ids 0..38); `null` means no
+   * route is live any more. Returns an unsubscribe function.
+   */
+  onMod(cb: ModListener): () => void {
+    this.modListeners.add(cb)
+    return () => {
+      this.modListeners.delete(cb)
+    }
+  }
+
+  /** Mod wheel position, 0..1 (a modulation source). */
+  setModwheel(value: number) {
+    this.post({ type: "modwheel", value })
   }
 
   /** Tear down the node and context. The client can be started again afterwards. */
