@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.105",
+    "@ai-sdk/openai": "^4.0.118",
     "@ai-sdk/react": "^4.0.177",
     "@carbon/icons-react": "^11.92.0",
     "@ui-sdk/core": "0.1.0-beta.2",

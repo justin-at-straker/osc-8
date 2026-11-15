@@ -46,24 +46,53 @@ export function useStore<T>(select: (s: State) => T): T {
   return useSyncExternalStore(subscribe, () => select(state))
 }
 
-/** Merge a section-level partial edit onto the patch, validate, and record undo. Throws on invalid input. */
-export function editPatch(edit: PatchEdit, _source: Source = "user"): Patch {
-  const merged: Record<string, unknown> = { ...state.patch }
-  for (const [key, value] of Object.entries(edit)) {
-    const current = (state.patch as Record<string, unknown>)[key]
-    merged[key] =
-      value && typeof value === "object" && !Array.isArray(value) && current && typeof current === "object" && !Array.isArray(current)
-        ? { ...current, ...value }
-        : value
+const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+  !!v && typeof v === "object" && !Array.isArray(v)
+
+/** Deep-merge plain objects; arrays and wavetable refs (`table`) are replaced whole. */
+function deepMerge(base: unknown, edit: unknown, key?: string): unknown {
+  if (key === "table" || !isPlainObject(base) || !isPlainObject(edit)) return edit
+  const out: Record<string, unknown> = { ...base }
+  for (const [k, v] of Object.entries(edit)) if (v !== undefined) out[k] = deepMerge(base[k], v, k)
+  return out
+}
+
+/** Who made the most recent patch change, for "AI changed X" UI. */
+export let lastSource: Source = "load"
+
+// While a batch is open, edits share one undo entry (e.g. a whole AI agent run).
+let batchDepth = 0
+let batchOpened = false
+
+/** Group every patch edit made inside `fn` into a single undo step. */
+export async function batch<T>(fn: () => Promise<T> | T): Promise<T> {
+  if (batchDepth++ === 0) batchOpened = false
+  try {
+    return await fn()
+  } finally {
+    batchDepth--
   }
-  const next = Patch.parse(merged)
-  past.push(state.patch)
+}
+
+function pushUndo(prev: Patch) {
+  if (batchDepth > 0 && batchOpened) return
+  if (batchDepth > 0) batchOpened = true
+  past.push(prev)
   if (past.length > 200) past.shift()
   future.length = 0
+}
+
+/** Deep-merge a partial edit onto the patch, validate, and record undo. Throws on invalid input. */
+export function editPatch(edit: PatchEdit | DeepPartial<Patch>, source: Source = "user"): Patch {
+  const next = Patch.parse(deepMerge(state.patch, edit))
+  pushUndo(state.patch)
+  lastSource = source
   state = { ...state, patch: next }
   emit()
   return next
 }
+
+export type DeepPartial<T> = T extends unknown[] ? T : T extends object ? { [K in keyof T]?: DeepPartial<T[K]> } : T
 
 /** Set one field by dotted path, e.g. setPatchValue("filter.cutoff", 800). Used by knobs. */
 export function setPatchValue(path: string, value: unknown, source: Source = "user") {

@@ -16,17 +16,17 @@ A browser groovebox with a Serum-shaped wavetable synth and AI sound design, bui
 | 8 | Storage | Local-first IndexedDB. Projects export/import as `.zip` (JSON + samples). Every entity has a stable ID and a schema version so cloud sync can be added later. |
 | 9 | Audience | Public product. |
 | 10 | AI cost | BYOK only. No accounts. |
-| 11 | Key routing | Browser-direct: AI SDK runs in the browser, key stored in IndexedDB, never touches our infrastructure. Providers: Anthropic, OpenAI, OpenRouter. Strict CSP, no third-party scripts. |
+| 11 | Key routing | Browser-direct: AI SDK runs in the browser, key stored in IndexedDB, never touches our infrastructure. Providers: OpenAI (M1 default), Anthropic, OpenRouter. Strict CSP, no third-party scripts. |
 | 12 | AI UX | Contextual describe field on each instrument plus "variations" (generate 4, audition, keep one), and a global assistant on `Ctrl+K`. |
 | 13 | Devices | Desktop only (>= 1280px). QWERTY note input, Web MIDI optional. Panels built with `resizable`/`device` so tablet is possible later. |
 | 14 | Repo | `~/projects/osc-8`, local git, public later (account TBD before first push). |
 | 16 | License | MIT. |
 | 17 | Testing | Rust unit tests + golden-render tests (`cargo test`, native). Vitest for schema/tool validation. Playwright smoke test: app loads, worklet produces non-silent audio. |
 | 18 | Key color | SPEC-01 default orange-red `{ l: 0.64, c: 0.31, h: 48 }`. |
-| 19 | Default model | Latest Claude Sonnet; model picker per provider. |
+| 19 | Default model | OpenAI `gpt-6-luna` (Responses API, no temperature) for M1; model picker per provider. Dev key seeded from `.env.local` via a serve-only Vite `define`, never bundled. |
 | 20 | Sharing | Patches export/import as `.osc8.json`. |
 
-The UI kit: SPEC-01 shadcn registry at `https://spec-01.vercel.app/r/registry.json`, app wrapped in `<Hardware>` from `components/ui/hardware`. Components are skins over `@ui-sdk/react`, pinned to the exact snapshot the registry uses (`0.0.0-20261111125312.ga16c1d57`). Do not float it.
+The UI kit: SPEC-01 shadcn registry at `https://spec-01.vercel.app/r/registry.json`, app wrapped in `<Hardware>` from `components/ui/hardware`. Components are skins over `@ui-sdk/react`. The registry pins snapshot `0.0.0-20261111125312.ga16c1d57`, which is not published on npm, so we pin `0.1.0-beta.2` exactly and install registry items via `scripts/vendor-spec01.mjs` (mirrors items locally with the version rewritten). Do not float it.
 
 ## Architecture
 
@@ -68,9 +68,9 @@ Out of v1: drawn LFOs, second filter, wavetable editor UI.
   2. Rust crate -> WASM -> AudioWorklet, "tap to start audio"
   3. One synth track: 1 wavetable osc (built-in tables) + 1 LP filter + amp envelope. Full patch schema defined, partly wired.
   4. Sequencer clock in WASM; piano roll (adapted from SPEC-01 `midi-editor`) driving one 16-step pattern; tempo/play on an LCD transport
-  5. BYOK settings (Anthropic first) + describe field -> `setPatch` -> audible
+  5. BYOK settings (OpenAI first) + describe field -> `setPatch` -> audible
   6. UI SDK `act`: "brighter" turns the real cutoff knob
 - **M2** Full synth: 2 oscs, unison, warp, sub/noise, mod matrix, LFOs/envelopes, FX, formula wavetables
 - **M3** Drum sampler + step grid, 8 tracks, pattern banks
 - **M4** Mixer, song mode, project `.zip`, WAV export, IndexedDB persistence
-- **M5** Global assistant, variations, OpenAI + OpenRouter, polish, CSP, Playwright smoke test
+- **M5** Global assistant, variations, Anthropic + OpenRouter, polish, CSP, Playwright smoke test
