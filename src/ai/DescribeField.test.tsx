@@ -5,7 +5,7 @@ import { DescribeField } from "./DescribeField"
 
 it("without a key, Generate shows an inline error and opens KeySettings; the widget is hidden from the agent", async () => {
   render(<DescribeField />)
-  const input = screen.getByLabelText("Describe a sound")
+  const input = screen.getByLabelText("Describe a sound or a groove")
   fireEvent.input(input, { target: { value: "warm pad" } })
   fireEvent.click(screen.getByRole("button", { name: "Generate" }))
 
@@ -14,6 +14,6 @@ it("without a key, Generate shows an inline error and opens KeySettings; the wid
   expect(screen.getByText(/stays in this browser and is sent only to OpenAI/)).toBeTruthy()
 
   const labels = getUiAgent().snapshot().map((c) => c.label)
-  expect(labels).not.toContain("Describe a sound")
+  expect(labels).not.toContain("Describe a sound or a groove")
   expect(labels).not.toContain("OpenAI API key")
 })

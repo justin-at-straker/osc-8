@@ -6,7 +6,7 @@ import { jsonSchema, tool, type ToolSet } from "ai"
 import { z } from "zod"
 import { BUILTIN_TABLES, Patch, type PatchEdit } from "@/engine/patch"
 import { PARAMS } from "@/engine/params"
-import { editPatch, getState } from "@/state/store"
+import { editPatch, getState, setPattern, setTransport } from "@/state/store"
 import type { UiAgent } from "./ui-agent"
 
 /** Patch fields the M1 engine actually renders. Everything else validates and is stored, but is silent for now. */
@@ -127,8 +127,60 @@ export function createPatchTools() {
       inputSchema: jsonSchema<Record<string, unknown>>(z.toJSONSchema(SetPatchInput, { io: "input" }) as never),
       execute: async (input) => applySetPatch(input),
     }),
+    getPattern: tool({
+      description: "Returns the current 16-step pattern (notes with step, MIDI note, length in steps, velocity) and the tempo.",
+      inputSchema: z.object({}),
+      execute: async () => ({ pattern: getState().pattern, bpm: getState().transport.bpm }),
+    }),
+    setPattern: tool({
+      description: SET_PATTERN_DESCRIPTION,
+      inputSchema: jsonSchema<Record<string, unknown>>(z.toJSONSchema(SetPatternInput, { io: "input" }) as never),
+      execute: async (input) => applySetPattern(input),
+    }),
   } satisfies ToolSet
 }
+
+// ---- Music: the AI writes the pattern too ----
+
+/** The piano roll shows C3..C5 and 16 steps; notes outside it would be invisible, so the tool enforces it. */
+export const PATTERN_NOTE_MIN = 48
+export const PATTERN_NOTE_MAX = 72
+export const PATTERN_STEPS = 16
+
+export const SetPatternInput = z
+  .object({
+    notes: z
+      .array(
+        z
+          .object({
+            step: z.number().int().min(0).max(PATTERN_STEPS - 1).describe("Start step, 0..15 (16th notes; 0, 4, 8, 12 are the beats)."),
+            note: z.number().int().min(PATTERN_NOTE_MIN).max(PATTERN_NOTE_MAX).describe("MIDI note, 48 (C3) .. 72 (C5). 60 = C4."),
+            length: z.number().int().min(1).max(PATTERN_STEPS).describe("Length in 16th-note steps. Notes may run past step 15; they wrap."),
+            velocity: z.number().min(0.05).max(1).describe("0..1; vary it (e.g. 0.6 ghost notes, 1.0 accents) for groove."),
+          })
+          .strict()
+      )
+      .max(64)
+      .describe("Every note of the new pattern. Replaces the whole pattern. An empty array clears it."),
+    bpm: z.number().min(60).max(200).optional().describe("Tempo, if the request implies one (house ~124, techno ~130, dnb ~174, hip-hop ~90)."),
+  })
+  .strict()
+
+export type SetPatternResult = { ok: true; notes: number; bpm: number } | { ok: false; error: string }
+
+export function applySetPattern(input: unknown): SetPatternResult {
+  const parsed = SetPatternInput.safeParse(input)
+  if (!parsed.success) return { ok: false, error: z.prettifyError(parsed.error) }
+  const { notes, bpm } = parsed.data
+  // One note per (step, pitch): later duplicates win.
+  const unique = new Map(notes.map((n) => [`${n.step}:${n.note}`, n]))
+  const sorted = [...unique.values()].sort((a, b) => a.step - b.step || a.note - b.note)
+  setPattern({ steps: PATTERN_STEPS, notes: sorted }, "ai")
+  if (bpm !== undefined) setTransport({ bpm: Math.round(bpm) })
+  return { ok: true, notes: sorted.length, bpm: getState().transport.bpm }
+}
+
+const SET_PATTERN_DESCRIPTION = `Write the music: replace the 16-step pattern the synth plays in a loop (one bar of 16th notes). Notes are MIDI numbers within C3..C5 (48..72) because that is the piano roll's visible range; to make a bass sound low, write the line in this range and set the patch's oscA.octave to -1 or -2 with setPatch, rather than writing lower notes. Optionally set bpm. Undo restores the previous pattern.`
 
 /**
  * The UI SDK bridge's own tools (`agentTools`: snapshot, query, act), routed to

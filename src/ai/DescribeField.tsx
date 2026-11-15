@@ -13,7 +13,7 @@ import { DEFAULT_SETTINGS, errorMessage, MissingKeyError, type AiSettings } from
 type Status = { tone: "idle" | "busy" | "ok" | "error"; text: string }
 
 export type DescribeFieldProps = {
-  /** Field label. Defaults to "Describe a sound". */
+  /** Field label. Defaults to "Describe a sound or a groove". */
   label?: string
   placeholder?: string
   settings?: AiSettings
@@ -22,8 +22,8 @@ export type DescribeFieldProps = {
 }
 
 export function DescribeField({
-  label = "Describe a sound",
-  placeholder = "dark detuned reese, glassy pluck, a bit brighter...",
+  label = "Describe a sound or a groove",
+  placeholder = "dark reese with a rolling dnb bassline, glassy pluck arp in A minor, a bit brighter...",
   settings = DEFAULT_SETTINGS,
   onDone,
 }: DescribeFieldProps) {

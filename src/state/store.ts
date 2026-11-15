@@ -26,8 +26,12 @@ const initial: State = {
 
 let state = initial
 const listeners = new Set<() => void>()
-const past: Patch[] = []
-const future: Patch[] = []
+// Undo covers the sound and the notes together, so an AI run that writes both
+// (or a preset load) is one step back.
+type Snapshot = { patch: Patch; pattern: Pattern }
+const past: Snapshot[] = []
+const future: Snapshot[] = []
+const snapshot = (): Snapshot => ({ patch: state.patch, pattern: state.pattern })
 
 function emit() {
   for (const l of listeners) l()
@@ -74,10 +78,10 @@ export async function batch<T>(fn: () => Promise<T> | T): Promise<T> {
   }
 }
 
-function pushUndo(prev: Patch) {
+function pushUndo() {
   if (batchDepth > 0 && batchOpened) return
   if (batchDepth > 0) batchOpened = true
-  past.push(prev)
+  past.push(snapshot())
   if (past.length > 200) past.shift()
   future.length = 0
 }
@@ -85,7 +89,7 @@ function pushUndo(prev: Patch) {
 /** Deep-merge a partial edit onto the patch, validate, and record undo. Throws on invalid input. */
 export function editPatch(edit: PatchEdit | DeepPartial<Patch>, source: Source = "user"): Patch {
   const next = Patch.parse(deepMerge(state.patch, edit))
-  pushUndo(state.patch)
+  pushUndo()
   lastSource = source
   state = { ...state, patch: next }
   emit()
@@ -137,8 +141,8 @@ export function undo() {
   lastGesture.at = 0
   const prev = past.pop()
   if (!prev) return
-  future.push(state.patch)
-  state = { ...state, patch: prev }
+  future.push(snapshot())
+  state = { ...state, ...prev }
   emit()
 }
 
@@ -146,12 +150,18 @@ export function redo() {
   lastGesture.at = 0
   const next = future.pop()
   if (!next) return
-  past.push(state.patch)
-  state = { ...state, patch: next }
+  past.push(snapshot())
+  state = { ...state, ...next }
   emit()
 }
 
-export function setPattern(pattern: Pattern) {
+/** Replace the pattern, with undo. Repeated edits from one gesture (a note drag) share an undo entry. */
+export function setPattern(pattern: Pattern, source: Source = "user") {
+  const now = Date.now()
+  const continuing = lastGesture.path === "pattern" && lastGesture.source === source && now - lastGesture.at < GESTURE_MS
+  lastGesture = { path: "pattern", source, at: now }
+  // "load" (initial seeding, project open) isn't an edit, so it has no undo entry.
+  if (!continuing && source !== "load") pushUndo()
   state = { ...state, pattern }
   emit()
 }
