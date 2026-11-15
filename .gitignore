@@ -29,3 +29,5 @@ diag.txt
 src/default-session.json
 *.osc8-session.json
 .vercel
+
+.vercel
