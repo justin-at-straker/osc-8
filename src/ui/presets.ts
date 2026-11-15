@@ -58,6 +58,21 @@ export const FACTORY_PRESETS: Patch[] = [
     },
     master: { volume: 0.7 },
   }),
+  preset("funk-machine", "BS Funk Machine", {
+    oscA: { table: table("basic"), position: 0.66, octave: -1, level: 0.8 },
+    oscB: { enabled: true, table: table("pwm"), position: 0.5, octave: -1, fine: 6, level: 0.4 },
+    sub: { enabled: true, level: 0.45, octave: -1, shape: "sine" },
+    filter: { cutoff: 380, resonance: 0.45 },
+    env1: { attack: 0.002, decay: 0.25, sustain: 0.5, release: 0.08 },
+    env2: { attack: 0, decay: 0.18, sustain: 0, release: 0.1 },
+    mod: [route("env2", "filter.cutoff", 0.45), route("velocity", "filter.cutoff", 0.15)],
+    fx: {
+      distortion: { enabled: true, type: "tube", drive: 0.3, mix: 0.5 },
+      ott: { enabled: true, depth: 0.35, time: 0.4 },
+      eq: { enabled: true, low: 1, mid: 1, high: -1 },
+    },
+    master: { volume: 0.72 },
+  }),
   preset("reese-drift", "BS Reese Drift", {
     oscA: { table: table("pwm"), position: 0.62, octave: -1, fine: -9, level: 0.8, unison: 7, detune: 0.3, blend: 0.8, spread: 0.45 },
     oscB: { enabled: true, table: table("pwm"), position: 0.4, octave: -1, fine: 9, level: 0.55, unison: 3, detune: 0.2, blend: 0.7, spread: 0.4 },
@@ -324,7 +339,7 @@ export const FACTORY_PRESETS: Patch[] = [
   }),
 ]
 
-/** The patch loaded at startup: the 80s poly brass the default hook is written for. */
-export const DEFAULT_PRESET_ID = "factory/poly-brass"
+/** The patch loaded at startup: the funky house bass the default groove is written for. */
+export const DEFAULT_PRESET_ID = "factory/funk-machine"
 
 export const presetCategory = (p: Patch) => p.name.slice(0, 2) as PresetCategory

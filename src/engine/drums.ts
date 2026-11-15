@@ -109,34 +109,47 @@ export function kitToParams(kit: DrumKit): [number, number][] {
   return out
 }
 
-// One bar of the 80s groove, starting at absolute step `at`.
-function grooveBar(at: number): DrumHit[] {
+// One bar of the funky house groove, starting at absolute step `at`.
+function houseBar(at: number, perc: "rim" | "cowbell" | "none"): DrumHit[] {
+  const hit = (step: number, voice: DrumVoice, velocity: number, accent = false): DrumHit => ({ step: at + step, voice, velocity, accent })
   return [
-    ...[0, 7, 8].map((step) => ({ step: at + step, voice: "kick" as const, velocity: step === 7 ? 0.7 : 0.95, accent: step === 0 })),
-    ...[4, 12].map((step) => ({ step: at + step, voice: "snare" as const, velocity: 0.95, accent: true })),
-    { step: at + 12, voice: "clap" as const, velocity: 0.7, accent: false },
-    ...[0, 2, 4, 6, 8, 10, 12, 14].map((step) => ({ step: at + step, voice: "closedHat" as const, velocity: step % 4 === 2 ? 0.6 : 0.45, accent: false })),
+    ...[0, 4, 8, 12].map((s) => hit(s, "kick", 0.95, s === 0)),
+    hit(4, "clap", 0.85), hit(12, "clap", 0.9),
+    ...[2, 6, 10, 14].map((s) => hit(s, "openHat", 0.6)),
+    // Shuffled 16th closed hats between the open ones, louder on the "e".
+    ...[1, 3, 5, 7, 9, 11, 13, 15].map((s) => hit(s, "closedHat", s % 4 === 1 ? 0.55 : 0.35)),
+    ...(perc === "rim" ? [hit(7, "rim", 0.5), hit(15, "rim", 0.45)] : []),
+    ...(perc === "cowbell" ? [hit(3, "cowbell", 0.4), hit(11, "cowbell", 0.45)] : []),
   ]
 }
 
-// The last beat of a bar replaced by a fill.
-function fill(at: number, kind: "snare" | "toms"): DrumHit[] {
-  const base = grooveBar(at).filter((h) => h.step < at + 12)
-  const tail: DrumHit[] =
-    kind === "snare"
-      ? [12, 13, 14, 15].map((s, i) => ({ step: at + s, voice: "snare" as const, velocity: 0.55 + i * 0.12, accent: s === 15 }))
-      : [
-          { step: at + 12, voice: "highTom", velocity: 0.85, accent: false },
-          { step: at + 13, voice: "midTom", velocity: 0.85, accent: false },
-          { step: at + 14, voice: "lowTom", velocity: 0.9, accent: false },
-          { step: at + 15, voice: "lowTom", velocity: 0.95, accent: true },
-          { step: at + 15, voice: "cymbal", velocity: 0.7, accent: false },
-        ]
-  return [...base, ...tail]
+// Bar 4: the last beat becomes a clap-and-rim fill into the loop.
+function houseFill(at: number): DrumHit[] {
+  const base = houseBar(at, "rim").filter((h) => h.step < at + 12 || h.voice === "kick")
+  return [
+    ...base,
+    { step: at + 12, voice: "clap", velocity: 0.9, accent: false },
+    { step: at + 13, voice: "rim", velocity: 0.6, accent: false },
+    { step: at + 14, voice: "clap", velocity: 0.75, accent: false },
+    { step: at + 15, voice: "clap", velocity: 0.95, accent: true },
+    { step: at + 15, voice: "openHat", velocity: 0.7, accent: false },
+  ]
 }
 
-/** A starter beat so the 808 track plays something: an 8-bar 80s drum-machine groove with fills on bars 4 and 8. */
+/** A starter beat so the 808 track plays something: 4 bars of swung, funky house with a fill on bar 4. */
 export const DEMO_DRUMS: DrumPattern = {
-  steps: 128,
-  hits: [0, 1, 2, 3, 4, 5, 6, 7].flatMap((b) => (b === 3 ? fill(b * 16, "snare") : b === 7 ? fill(b * 16, "toms") : grooveBar(b * 16))),
+  steps: 64,
+  hits: [...houseBar(0, "rim"), ...houseBar(16, "cowbell"), ...houseBar(32, "rim"), ...houseFill(48)],
 }
+
+/** Kit settings the demo groove is tuned for: a tight punchy kick, crisp hats and a house swing. */
+export const DEMO_KIT = {
+  voices: {
+    kick: { tune: 0.55, decay: 0.4, tone: 0.55 },
+    clap: { level: 0.8 },
+    openHat: { decay: 0.35, level: 0.45 },
+    closedHat: { decay: 0.2, tone: 0.65 },
+  },
+  swing: 0.3,
+  drive: 0.2,
+} as const

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { editKit, getState, replacePatch, resetHistory, setDrumPattern, setPattern, setTransport } from "@/state/store"
 import { loadStartup } from "@/state/startup"
-import { DEMO_DRUMS } from "@/engine/drums"
+import { DEMO_DRUMS, DEMO_KIT } from "@/engine/drums"
 import { Hardware } from "@/components/ui/hardware"
 import { Toasts, notify } from "@/components/ui/toaster"
 import { DescribeField, KeySettings } from "@/ai"
@@ -26,6 +26,7 @@ if (saved) {
   loadPresetById(DEFAULT_PRESET_ID)
   setPattern(DEMO_PATTERN, "load")
   setDrumPattern(DEMO_DRUMS, "load")
+  editKit(DEMO_KIT, "load")
   setTransport({ bpm: DEMO_BPM })
 }
 resetHistory()
