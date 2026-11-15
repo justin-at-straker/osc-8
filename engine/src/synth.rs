@@ -982,6 +982,10 @@ impl Instrument for WavetableSynth {
         if retrigger {
             v.env.gate_on();
             v.mods.trigger(note, v.velocity, &mut self.rng);
+        } else {
+            // A touching note's note-off may have just released the voice.
+            v.env.resume();
+            v.mods.resume();
         }
         if fresh {
             let k = &self.knobs;
@@ -1264,6 +1268,12 @@ mod tests {
         render_ms(&mut s, 50);
         let mid = s.unison_freqs(60, 0)[0];
         assert!(mid < hz(58.0), "should still be gliding, got {mid}");
+        // The slid-to note is held: it must not ride out the old note's release.
+        render_ms(&mut s, 500);
+        assert_eq!(s.active_voices(), 1);
+        let v = &s.voices[0];
+        assert!(v.gate && v.env.stage != crate::envelope::Stage::Release);
+        assert!((v.env.level - 0.7).abs() < 0.01, "at sustain, got {}", v.env.level);
     }
 
     #[test]

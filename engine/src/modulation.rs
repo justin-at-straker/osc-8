@@ -368,6 +368,12 @@ impl ModVoice {
         self.random = rand01(rng);
     }
 
+    /// Legato: pick env2/env3 back up from a release without retriggering.
+    pub fn resume(&mut self) {
+        self.env2.resume();
+        self.env3.resume();
+    }
+
     pub fn release(&mut self) {
         self.env2.gate_off();
         self.env3.gate_off();

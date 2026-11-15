@@ -82,6 +82,14 @@ impl Envelope {
         self.stage = Stage::Attack;
     }
 
+    /// Legato: a released envelope heads back to sustain from where it is,
+    /// without a new attack. Otherwise unchanged.
+    pub fn resume(&mut self) {
+        if self.stage == Stage::Release {
+            self.stage = Stage::Decay;
+        }
+    }
+
     pub fn gate_off(&mut self) {
         if self.active() {
             self.stage = Stage::Release;
