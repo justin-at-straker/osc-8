@@ -2,7 +2,7 @@
 // (setPatch) or nudge the visible knobs (UI SDK act), whichever fits the ask.
 import { generateText, isStepCount, type LanguageModel, type ToolSet } from "ai"
 import { BUILTIN_TABLES } from "@/engine/patch"
-import { getState } from "@/state/store"
+import { batch, getState } from "@/state/store"
 import { DEFAULT_SETTINGS, getModel, providerOptionsFor, type AiSettings } from "./provider"
 import { AUDIBLE_PARAMS, createPatchTools, createUiTools } from "./tools"
 import { agentTools, getUiAgent, type UiAgent } from "./ui-agent"
@@ -92,7 +92,8 @@ export async function runSoundAgent({
   const bridge = uiAgent === undefined ? getUiAgent() : uiAgent
   const tools: ToolSet = { ...createPatchTools(), ...(bridge ? createUiTools(bridge, agentTools) : {}) }
 
-  const result = await generateText({
+  // One agent run = one undo step, however many setPatch/act calls it makes.
+  const result = await batch(() => generateText({
     model: resolved,
     instructions: SYSTEM_PROMPT,
     prompt: `${contextLine()}\n\nRequest: ${text}`,
@@ -106,7 +107,7 @@ export async function runSoundAgent({
     onToolExecutionStart: ({ toolCall }) => {
       onStatus?.({ phase: "tool", message: describeTool(toolCall.toolName, toolCall.input) })
     },
-  })
+  }))
 
   const summary = result.text.trim() || (result.toolCalls.length ? "Done." : "No changes made.")
   onStatus?.({ phase: "done", message: summary })

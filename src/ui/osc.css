@@ -1,0 +1,409 @@
+/* OSC-8 M1 layout, on top of the SPEC-01 device skin. Everything is scoped
+   under [data-osc-page] so it can't leak into other devices. */
+
+/* The instrument fills the viewport height exactly: the top strip and front
+   panel keep their natural size and the piano roll's screen takes the rest.
+   Below MIN_H the page scrolls instead of crushing the roll. */
+[data-osc-page] {
+  --device-w: 1184px;
+  height: 100dvh;
+  min-height: 720px;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+
+  & [data-device]:not(#_):not(#_) {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 14px 22px 14px;
+    height: 100%;
+    box-sizing: border-box;
+  }
+}
+
+[data-osc-page] [data-osc-roll] {
+  flex: 1;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+
+  & [data-kit="display"]:not(#_):not(#_) {
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  & [data-kit="display-bezel"]:not(#_):not(#_) {
+    min-height: 0;
+    display: flex;
+  }
+
+  & [data-kit="display-screen"]:not(#_):not(#_) {
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* 25 note rows + the step lane share the screen's height. */
+  & [data-roll]:not(#_):not(#_) {
+    grid-template-rows: repeat(25, minmax(0, 1fr)) 9px;
+  }
+}
+
+/* The AI field takes the whole slot, so its keys never overlap the input. */
+[data-osc-ai-slot] > * {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The kit input is width: 100% with content-box sizing, so its padding spilled
+   28px under the Generate key. */
+[data-osc-ai-slot] [data-kit="input"]:not(#_):not(#_) {
+  box-sizing: border-box;
+}
+
+/* The plate stays in the device's top corner in the column layout. */
+[data-osc-page] [data-device-plate]:not(#_):not(#_) {
+  align-self: flex-start;
+}
+
+/* Top strip: transport on the left, the AI describe field on the right. */
+[data-osc-top] {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 24px;
+  padding-top: 6px;
+}
+
+[data-osc-ai-slot] {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  min-height: 56px;
+
+  &:empty {
+    border-radius: 10px;
+    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.05);
+  }
+}
+
+[data-osc-transport] {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+
+  & [data-osc-play][data-kit="button"]:not(#_):not(#_) {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+[data-osc-lcd] {
+  min-width: 330px;
+}
+
+[data-osc-lcd-row] {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+
+  & small {
+    font: 600 9px/1 var(--sans);
+    letter-spacing: 0.12em;
+    opacity: 0.7;
+    margin-inline: 3px;
+  }
+}
+
+[data-osc-lcd-field] {
+  display: inline-flex;
+  align-items: baseline;
+}
+
+[data-osc-lcd-state] {
+  margin-inline-start: auto;
+  font: 600 10px/1 var(--sans);
+  letter-spacing: 0.16em;
+}
+
+/* The front panel: four modules side by side, each a printed section. */
+[data-osc-panel] {
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  gap: 10px;
+}
+
+[data-osc-module] {
+  min-width: 0;
+  padding: 10px 10px 12px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgb(0 0 0 / 0.018), rgb(0 0 0 / 0.035));
+  box-shadow:
+    inset 0 1px 2px rgb(0 0 0 / 0.08),
+    0 1px 0 #fff;
+
+  & > h2 {
+    font: var(--legend);
+    letter-spacing: 0.18em;
+  }
+}
+
+[data-osc-controls] {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-around;
+  gap: 4px;
+  min-height: 112px;
+}
+
+[data-osc-stack] {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+}
+
+[data-osc-history] {
+  align-self: center;
+  gap: 6px;
+
+  & [data-kit="button"]:not(#_):not(#_) {
+    min-width: 38px;
+    width: 38px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+/* Knobs: room for "20K" / "0.005s" under the cap. */
+[data-osc-page] [data-kit="knob"] [data-kit="knob-readout"]:not(#_):not(#_) {
+  width: 50px;
+}
+
+[data-osc-page] [data-kit="knob"] [data-kit="knob-dial"] {
+  touch-action: none;
+  cursor: ns-resize;
+}
+
+/* Steppers, compact for octave and semitone. */
+[data-osc-stepper] {
+  & [data-kit="field"] {
+    display: grid;
+    gap: 4px;
+    justify-items: center;
+  }
+
+  & [data-kit="field"] > [data-kit="label"]:not(#_):not(#_) {
+    font: var(--legend);
+    letter-spacing: 0.14em;
+    color: var(--legend-ink);
+    text-transform: uppercase;
+  }
+
+  & [data-kit="stepper"] [data-kit="button"]:not(#_):not(#_) {
+    height: 26px;
+    min-width: 26px;
+    width: 26px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  & [data-kit="stepper-input"]:not(#_):not(#_) {
+    width: 38px;
+    height: 26px;
+    font-size: 12px;
+  }
+}
+
+[data-osc-switch] {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 18px 22px 0 26px;
+}
+
+[data-osc-legend] {
+  font: var(--legend);
+  letter-spacing: 0.14em;
+  color: var(--legend-ink);
+  text-transform: uppercase;
+}
+
+/* The table dial, a size down so OSC A fits beside its knobs. */
+[data-osc-dial-wrap] {
+  zoom: 0.7;
+  margin-top: -4px;
+
+  & [data-kit="field"] > [data-kit="label"] {
+    display: none;
+  }
+}
+
+/* The roll: a small bar of pattern keys over the screen. */
+[data-osc-roll] {
+  display: grid;
+  gap: 8px;
+}
+
+[data-osc-roll-bar] {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  & > h2 {
+    margin: 0 auto 0 0;
+    font: var(--legend);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--legend-ink);
+  }
+
+  & [data-osc-stepper] [data-kit="field"] {
+    grid-auto-flow: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  & > [data-kit="button"]:not(#_):not(#_) {
+    height: 30px;
+    min-width: 30px;
+    padding: 0 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+[data-osc-grid] {
+  user-select: none;
+
+  & [data-roll-row][data-octave] {
+    box-shadow: inset 0 -1px 0 rgb(255 255 255 / 0.08);
+  }
+
+  /* A held note reads as one bar: the cells after its start join it. */
+  & [data-roll-row] button[data-held] {
+    margin-inline-start: -2px;
+    border-start-start-radius: 0;
+    border-end-start-radius: 0;
+  }
+
+  & [data-roll-row] button[data-start]:not([data-tail]) {
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
+  }
+
+  & [data-roll-row] button[data-held]:not([data-now]) {
+    filter: brightness(0.85);
+  }
+}
+
+[data-osc-hint] {
+  margin: 0;
+  font: var(--legend);
+  letter-spacing: 0.12em;
+  color: var(--legend-ink);
+  text-align: center;
+  text-transform: uppercase;
+}
+
+/* The audio gate: the instrument dims behind a big power key. */
+[data-osc-gate] {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 18px;
+  background: rgb(236 236 232 / 0.72);
+  backdrop-filter: blur(3px);
+}
+
+[data-osc-power] {
+  position: relative;
+  width: 112px;
+  height: 112px;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  color: #fff;
+  background: radial-gradient(circle at 50% 35%, color-mix(in oklab, var(--key-color, #e2522b) 80%, #fff), var(--key-color, #e2522b) 62%);
+  box-shadow:
+    0 5px 0 color-mix(in oklab, var(--key-color, #e2522b) 60%, #000),
+    0 14px 24px -8px rgb(0 0 0 / 0.4);
+  transition: transform 80ms, box-shadow 80ms;
+
+  &:active:not(:disabled) {
+    transform: translateY(4px);
+    box-shadow:
+      0 1px 0 color-mix(in oklab, var(--key-color, #e2522b) 60%, #000),
+      0 6px 12px -6px rgb(0 0 0 / 0.4);
+  }
+
+  &:disabled {
+    cursor: progress;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--ink, #222);
+    outline-offset: 6px;
+  }
+}
+
+[data-osc-power-ring] svg {
+  width: 44px;
+  height: 44px;
+}
+
+[data-osc-power-led] {
+  position: absolute;
+  top: 14px;
+  right: 22px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #5a2a1c;
+
+  [data-state="starting"] & {
+    background: #ffd36b;
+    box-shadow: 0 0 8px #ffd36b;
+    animation: osc-blink 0.6s steps(2) infinite;
+  }
+
+  [data-state="error"] & {
+    background: #ff3b30;
+    box-shadow: 0 0 8px #ff3b30;
+  }
+}
+
+[data-osc-gate-caption] {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  margin: 0;
+  font: 600 11px/1.2 var(--sans);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #55544f;
+
+  & small {
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    text-transform: none;
+    color: #8f8e89;
+  }
+}
+
+@keyframes osc-blink {
+  50% {
+    opacity: 0.2;
+  }
+}

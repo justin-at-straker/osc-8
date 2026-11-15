@@ -82,7 +82,7 @@ export function DescribeField({
           void generate()
         }}
       >
-        <Field data-kit="field" style={{ flex: 1 }}>
+        <Field data-kit="field" style={{ flex: 1, minWidth: 0 }}>
           <FieldLabel data-kit="label">{label}</FieldLabel>
           <Input
             data-kit="input"

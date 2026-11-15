@@ -1,0 +1,131 @@
+import { Field, FieldLabel } from "@ui-sdk/react/field"
+import { NumberInput, NumberInputControl, NumberInputDecrement, NumberInputGroup, NumberInputIncrement } from "@ui-sdk/react/number-input"
+import { Switch, SwitchThumb } from "@ui-sdk/react/switch"
+import { haptic } from "@/lib/haptics"
+import { Icon } from "@/components/ui/icon"
+import { ModeDial } from "@/components/ui/mode-dial"
+import { Knob, type KnobProps } from "./knob"
+import { usePatchValue, writePatchValue } from "./use-patch"
+
+// Store-bound controls. Each wraps a SPEC-01 skin (or the same markup, where
+// the kit's version is uncontrolled) and carries `data-param` with its patch path.
+
+/** A knob bound to a numeric patch field. */
+export function ParamKnob({ param, ...props }: Omit<KnobProps, "value" | "onValueChange" | "param"> & { param: string }) {
+  const value = usePatchValue<number>(param)
+  return <Knob {...props} param={param} value={value} onValueChange={(next) => writePatchValue(param, next)} />
+}
+
+/** The kit's Stepper, controlled: minus, a readout, plus. For whole numbers like octave or note length. */
+export function StepperControl({
+  label,
+  legend,
+  value,
+  min,
+  max,
+  signed,
+  param,
+  onValueChange,
+}: {
+  label: string
+  legend?: string
+  value: number
+  min: number
+  max: number
+  signed?: boolean
+  param?: string
+  onValueChange: (value: number) => void
+}) {
+  return (
+    <div data-param={param} data-osc-stepper>
+      <NumberInput
+        value={value}
+        min={min}
+        max={max}
+        step={1}
+        locale="en-US"
+        format={signed ? { signDisplay: "exceptZero" } : undefined}
+        onValueChange={(next) => {
+          if (next === null || next === value) return
+          haptic("selection")
+          onValueChange(Math.min(max, Math.max(min, Math.round(next))))
+        }}
+      >
+        <Field data-kit="field">
+          <FieldLabel data-kit="label" aria-hidden>
+            {legend ?? label}
+          </FieldLabel>
+          <NumberInputGroup data-kit="stepper">
+            <NumberInputDecrement data-kit="button" data-tone="secondary" aria-label={`Decrease ${label}`}>
+              <Icon name="minus" />
+            </NumberInputDecrement>
+            <NumberInputControl data-kit="stepper-input" aria-label={label} />
+            <NumberInputIncrement data-kit="button" data-tone="secondary" aria-label={`Increase ${label}`}>
+              <Icon name="plus" />
+            </NumberInputIncrement>
+          </NumberInputGroup>
+        </Field>
+      </NumberInput>
+    </div>
+  )
+}
+
+/** A stepper bound to a whole-number patch field. */
+export function ParamStepper({
+  param,
+  ...props
+}: {
+  param: string
+  label: string
+  legend?: string
+  min: number
+  max: number
+  signed?: boolean
+}) {
+  const value = usePatchValue<number>(param)
+  return <StepperControl {...props} param={param} value={value} onValueChange={(next) => writePatchValue(param, next)} />
+}
+
+/** An on/off switch bound to a boolean patch field. */
+export function ParamSwitch({ param, label, legend }: { param: string; label: string; legend?: string }) {
+  const checked = usePatchValue<boolean>(param)
+  return (
+    <div data-param={param} data-osc-switch>
+      <Switch
+        data-kit="switch"
+        aria-label={label}
+        checked={checked}
+        onCheckedChange={(next) => {
+          haptic("selection")
+          writePatchValue(param, next)
+        }}
+      >
+        <SwitchThumb data-kit="switch-thumb" />
+      </Switch>
+      <span data-osc-legend aria-hidden>
+        {legend ?? label}
+      </span>
+    </div>
+  )
+}
+
+/** The kit's mode dial bound to a string patch field. */
+export function ParamDial({
+  param,
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  param: string
+  label: string
+  options: { value: string; label: string }[]
+  value: string
+  onChange: (value: string) => void
+}) {
+  return (
+    <div data-param={param} data-osc-dial-wrap>
+      <ModeDial label={label} options={options} value={value} onValueChange={onChange} sweep={200} />
+    </div>
+  )
+}
