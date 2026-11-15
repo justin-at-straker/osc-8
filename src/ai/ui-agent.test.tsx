@@ -77,5 +77,5 @@ it("act moves the real Filter cutoff knob, reporting source agent", async () => 
 
   // The model was offered both toolsets in one call.
   const offered = model.doGenerateCalls[0]!.tools!.map((t) => t.name)
-  expect(offered).toEqual(expect.arrayContaining(["setPatch", "getPatch", "snapshot", "query", "act"]))
+  expect([...offered].sort()).toEqual(["act", "query", "snapshot"]) // UI SDK tools only
 })
