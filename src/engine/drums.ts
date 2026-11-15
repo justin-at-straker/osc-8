@@ -109,15 +109,34 @@ export function kitToParams(kit: DrumKit): [number, number][] {
   return out
 }
 
-/** A starter beat so the 808 track plays something: an 80s drum-machine groove under the default hook. */
+// One bar of the 80s groove, starting at absolute step `at`.
+function grooveBar(at: number): DrumHit[] {
+  return [
+    ...[0, 7, 8].map((step) => ({ step: at + step, voice: "kick" as const, velocity: step === 7 ? 0.7 : 0.95, accent: step === 0 })),
+    ...[4, 12].map((step) => ({ step: at + step, voice: "snare" as const, velocity: 0.95, accent: true })),
+    { step: at + 12, voice: "clap" as const, velocity: 0.7, accent: false },
+    ...[0, 2, 4, 6, 8, 10, 12, 14].map((step) => ({ step: at + step, voice: "closedHat" as const, velocity: step % 4 === 2 ? 0.6 : 0.45, accent: false })),
+  ]
+}
+
+// The last beat of a bar replaced by a fill.
+function fill(at: number, kind: "snare" | "toms"): DrumHit[] {
+  const base = grooveBar(at).filter((h) => h.step < at + 12)
+  const tail: DrumHit[] =
+    kind === "snare"
+      ? [12, 13, 14, 15].map((s, i) => ({ step: at + s, voice: "snare" as const, velocity: 0.55 + i * 0.12, accent: s === 15 }))
+      : [
+          { step: at + 12, voice: "highTom", velocity: 0.85, accent: false },
+          { step: at + 13, voice: "midTom", velocity: 0.85, accent: false },
+          { step: at + 14, voice: "lowTom", velocity: 0.9, accent: false },
+          { step: at + 15, voice: "lowTom", velocity: 0.95, accent: true },
+          { step: at + 15, voice: "cymbal", velocity: 0.7, accent: false },
+        ]
+  return [...base, ...tail]
+}
+
+/** A starter beat so the 808 track plays something: an 8-bar 80s drum-machine groove with fills on bars 4 and 8. */
 export const DEMO_DRUMS: DrumPattern = {
-  steps: 16,
-  hits: [
-    ...[0, 7, 8].map((step) => ({ step, voice: "kick" as const, velocity: step === 7 ? 0.7 : 0.95, accent: step === 0 })),
-    ...[4, 12].map((step) => ({ step, voice: "snare" as const, velocity: 0.95, accent: true })),
-    { step: 12, voice: "clap" as const, velocity: 0.7, accent: false },
-    ...[0, 2, 4, 6, 8, 10, 12, 14].map((step) => ({ step, voice: "closedHat" as const, velocity: step % 4 === 2 ? 0.6 : 0.45, accent: false })),
-    { step: 14, voice: "lowTom" as const, velocity: 0.6, accent: false },
-    { step: 15, voice: "midTom" as const, velocity: 0.55, accent: false },
-  ],
+  steps: 128,
+  hits: [0, 1, 2, 3, 4, 5, 6, 7].flatMap((b) => (b === 3 ? fill(b * 16, "snare") : b === 7 ? fill(b * 16, "toms") : grooveBar(b * 16))),
 }

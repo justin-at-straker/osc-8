@@ -156,7 +156,10 @@ export function createPatchTools() {
 /** The piano roll shows C3..C5 and 16 steps; notes outside it would be invisible, so the tool enforces it. */
 export const PATTERN_NOTE_MIN = 48
 export const PATTERN_NOTE_MAX = 72
+/** Default length; patterns may be 1, 2, 4 or 8 bars of 16 steps. */
 export const PATTERN_STEPS = 16
+export const PATTERN_LENGTHS = [16, 32, 64, 128] as const
+const Steps = z.union(PATTERN_LENGTHS.map((n) => z.literal(n)) as unknown as [z.ZodLiteral<16>, z.ZodLiteral<32>, z.ZodLiteral<64>, z.ZodLiteral<128>])
 
 export const SetPatternInput = z
   .object({
@@ -164,34 +167,38 @@ export const SetPatternInput = z
       .array(
         z
           .object({
-            step: z.number().int().min(0).max(PATTERN_STEPS - 1).describe("Start step, 0..15 (16th notes; 0, 4, 8, 12 are the beats)."),
+            step: z.number().int().min(0).max(127).describe("Start step, 0..steps-1 (16th notes; bar b starts at step 16*(b-1); beats at 0, 4, 8, 12 within each bar)."),
             note: z.number().int().min(PATTERN_NOTE_MIN).max(PATTERN_NOTE_MAX).describe("MIDI note, 48 (C3) .. 72 (C5). 60 = C4."),
-            length: z.number().int().min(1).max(PATTERN_STEPS).describe("Length in 16th-note steps. Notes may run past step 15; they wrap."),
+            length: z.number().int().min(1).max(128).describe("Length in 16th-note steps. Notes may run past the end; they wrap."),
             velocity: z.number().min(0.05).max(1).describe("0..1; vary it (e.g. 0.6 ghost notes, 1.0 accents) for groove."),
           })
           .strict()
       )
-      .max(64)
+      .max(512)
       .describe("Every note of the new pattern. Replaces the whole pattern. An empty array clears it."),
+    steps: Steps.optional().describe("Pattern length in steps: 16 (1 bar), 32 (2), 64 (4) or 128 (8 bars). Defaults to the current length."),
     bpm: z.number().min(60).max(200).optional().describe("Tempo, if the request implies one (house ~124, techno ~130, dnb ~174, hip-hop ~90)."),
   })
   .strict()
 
-export type SetPatternResult = { ok: true; notes: number; bpm: number } | { ok: false; error: string }
+export type SetPatternResult = { ok: true; notes: number; steps: number; bpm: number } | { ok: false; error: string }
 
 export function applySetPattern(input: unknown): SetPatternResult {
   const parsed = SetPatternInput.safeParse(input)
   if (!parsed.success) return { ok: false, error: z.prettifyError(parsed.error) }
   const { notes, bpm } = parsed.data
+  const steps = parsed.data.steps ?? getState().pattern.steps
+  const beyond = notes.find((n) => n.step >= steps)
+  if (beyond) return { ok: false, error: `Note at step ${beyond.step} is beyond the pattern length (${steps} steps). Set steps to 32, 64 or 128 for longer patterns.` }
   // One note per (step, pitch): later duplicates win.
   const unique = new Map(notes.map((n) => [`${n.step}:${n.note}`, n]))
   const sorted = [...unique.values()].sort((a, b) => a.step - b.step || a.note - b.note)
-  setPattern({ steps: PATTERN_STEPS, notes: sorted }, "ai")
+  setPattern({ steps, notes: sorted }, "ai")
   if (bpm !== undefined) setTransport({ bpm: Math.round(bpm) })
-  return { ok: true, notes: sorted.length, bpm: getState().transport.bpm }
+  return { ok: true, notes: sorted.length, steps, bpm: getState().transport.bpm }
 }
 
-const SET_PATTERN_DESCRIPTION = `Write the music: replace the 16-step pattern the synth plays in a loop (one bar of 16th notes). Notes are MIDI numbers within C3..C5 (48..72) because that is the piano roll's visible range; to make a bass sound low, write the line in this range and set the patch's oscA.octave to -1 or -2 with setPatch, rather than writing lower notes. Optionally set bpm. Undo restores the previous pattern.`
+const SET_PATTERN_DESCRIPTION = `Write the music: replace the pattern the synth plays in a loop: 1, 2, 4 or 8 bars of 16th notes (steps 16/32/64/128). Use 4 or 8 bars for melodies, progressions and anything that should develop; 1-2 bars for tight riffs. Notes are MIDI numbers within C3..C5 (48..72) because that is the piano roll's visible range; to make a bass sound low, write the line in this range and set the patch's oscA.octave to -1 or -2 with setPatch, rather than writing lower notes. Optionally set bpm. Undo restores the previous pattern.`
 
 /**
  * The UI SDK bridge's own tools (`agentTools`: snapshot, query, act), routed to
@@ -237,16 +244,17 @@ export const SetDrumsInput = z
       .array(
         z
           .object({
-            step: z.number().int().min(0).max(15),
+            step: z.number().int().min(0).max(127),
             voice: z.enum(DRUM_VOICES),
             velocity: z.number().min(0.05).max(1).describe("0..1; vary hats (0.4-0.7) for groove, 0.8-1 for kicks/snares."),
             accent: z.boolean().describe("808 accent: louder and punchier. Use sparingly, e.g. on the downbeat."),
           })
           .strict()
       )
-      .max(176)
+      .max(1024)
       .optional()
-      .describe("Every hit of the new 16-step drum pattern (replaces it). Omit to keep the current beat and only change the kit."),
+      .describe("Every hit of the new drum pattern (replaces it). Omit to keep the current beat and only change the kit."),
+    steps: Steps.optional().describe("Drum pattern length: 16 (1 bar), 32, 64 or 128 (8 bars). Defaults to the current length. Use longer patterns for fills at the end of bar 4 or 8."),
     kit: KitEdit.optional().describe("Partial kit edit, all values 0..1 (pan -1..1): per-voice level/tune/decay/tone/snappy/pan/mute, bus accent/level/drive/swing."),
     bpm: z.number().min(60).max(200).optional(),
   })
@@ -264,12 +272,15 @@ export function applySetDrums(input: unknown): SetDrumsResult {
     editKit(kit, "ai")
   }
   if (hits) {
+    const steps = parsed.data.steps ?? getState().drums.pattern.steps
+    const beyond = hits.find((h) => h.step >= steps)
+    if (beyond) return { ok: false, error: `Hit at step ${beyond.step} is beyond the drum pattern length (${steps} steps). Set steps to 32, 64 or 128.` }
     const unique = new Map(hits.map((h) => [`${h.step}:${h.voice}`, h]))
     const sorted = [...unique.values()].sort((a, b) => a.step - b.step || DRUM_VOICES.indexOf(a.voice) - DRUM_VOICES.indexOf(b.voice))
-    setDrumPattern({ steps: 16, hits: sorted }, "ai")
+    setDrumPattern({ steps, hits: sorted }, "ai")
   }
   if (bpm !== undefined) setTransport({ bpm: Math.round(bpm) })
   return { ok: true, hits: getState().drums.pattern.hits.length, bpm: getState().transport.bpm }
 }
 
-const SET_DRUMS_DESCRIPTION = `Write the beat on the 808 drum machine track: a 16-step loop (one bar of 16ths, steps 0/4/8/12 are the beats) with voices ${DRUM_VOICES.join(", ")} (closedHat chokes openHat). Optionally edit the kit (e.g. kick decay 0.8 + tune 0.3 for a long sub 808, swing 0.3 for shuffle) and set bpm. Undo restores the previous beat.`
+const SET_DRUMS_DESCRIPTION = `Write the beat on the 808 drum machine track: a loop of 1, 2, 4 or 8 bars of 16ths (steps 0/4/8/12 of each bar are the beats) with voices ${DRUM_VOICES.join(", ")} (closedHat chokes openHat). Optionally edit the kit (e.g. kick decay 0.8 + tune 0.3 for a long sub 808, swing 0.3 for shuffle) and set bpm. Undo restores the previous beat.`

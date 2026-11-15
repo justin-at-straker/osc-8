@@ -55,10 +55,10 @@ setDrums writes the beat on a separate 808-style drum machine (getDrums reads it
 - Hip-hop/boom bap (~90 bpm): kick on 0 and 7 or 10, snare on 4 and 12, 8th-note hats with velocity variation, swing 0.25-0.4.
 - Trap (~140 bpm, felt half-time): kick on 0 and syncopated (e.g. 3, 10, 11), snare/clap on 8 only, 16th hats with a few rolls; long 808 kick (decay 0.8+).
 - DnB (~174): kick on 0 and 10, snare on 4 and 12, busy 16th hats; breakbeat-ish ghost snares at low velocity.
-- Accent the downbeat; vary hat velocities; leave space.
+- Accent the downbeat; vary hat velocities; leave space. For 4 or 8 bar beats, repeat the groove and put a fill (toms, snare rolls, open hat) in the last bar.
 
 ## Writing music
-setPattern replaces the one-bar, 16-step loop the synth plays (getPattern reads it). Use it when the request asks for notes, a line, a melody, a groove, a riff, a bassline, an arp, or a genre/vibe ("a rolling dnb bassline", "something like a house stab"). A request can need both: design the sound with setPatch AND write the notes with setPattern.
+setPattern replaces the loop the synth plays, 1, 2, 4 or 8 bars long (getPattern reads it). For a melody, chord progression or "a track", write 4 or 8 bars with a progression and a motif that repeats with variation (e.g. bars 1-2 call, 3-4 answer); for a riff or groove, 1-2 bars. Use it when the request asks for notes, a line, a melody, a groove, a riff, a bassline, an arp, or a genre/vibe ("a rolling dnb bassline", "something like a house stab"). A request can need both: design the sound with setPatch AND write the notes with setPattern.
 - Pick a key and stay in its scale; say which in your reply. Minor keys suit dark/bass music.
 - Groove: basslines leave space (rests matter), use syncopation (steps 3, 6, 7, 10, 11, 14), vary velocity, and land on the root at step 0. Arps cycle chord tones in 16ths or 8ths. Leads/melodies have a contour and a repeated motif. Pads hold long notes (length 8-16) with 2-4 notes stacked as chords.
 - Note lengths shape feel: staccato length 1, legato lengths that touch the next note.
@@ -84,7 +84,7 @@ export type RunSoundAgentOptions = {
 function contextLine() {
   const p = getState().patch
   const table = p.oscA.table.kind === "builtin" ? p.oscA.table.name : p.oscA.table.kind
-  return `Current patch "${p.name}": oscA ${table} pos ${p.oscA.position} oct ${p.oscA.octave} semi ${p.oscA.semi}; filter ${p.filter.enabled ? "on" : "off"} cutoff ${Math.round(p.filter.cutoff)} Hz res ${p.filter.resonance}; amp env A ${p.env1.attack} D ${p.env1.decay} S ${p.env1.sustain} R ${p.env1.release}; volume ${p.master.volume}. Built-in tables: ${BUILTIN_TABLES.join(", ")}. Pattern: ${getState().pattern.notes.length} notes over 16 steps at ${getState().transport.bpm} bpm. Drums: ${getState().drums.pattern.hits.length} hits.`
+  return `Current patch "${p.name}": oscA ${table} pos ${p.oscA.position} oct ${p.oscA.octave} semi ${p.oscA.semi}; filter ${p.filter.enabled ? "on" : "off"} cutoff ${Math.round(p.filter.cutoff)} Hz res ${p.filter.resonance}; amp env A ${p.env1.attack} D ${p.env1.decay} S ${p.env1.sustain} R ${p.env1.release}; volume ${p.master.volume}. Built-in tables: ${BUILTIN_TABLES.join(", ")}. Pattern: ${getState().pattern.notes.length} notes over ${getState().pattern.steps} steps at ${getState().transport.bpm} bpm. Drums: ${getState().drums.pattern.hits.length} hits over ${getState().drums.pattern.steps} steps.`
 }
 
 function describeTool(name: string, input: unknown): string {
