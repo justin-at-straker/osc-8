@@ -42,6 +42,8 @@ export const Oscillator = z.object({
   fine: z.number().min(-100).max(100), // cents
   unison: z.number().int().min(1).max(16),
   detune: unit,
+  /** Unison detune curve: 1 linear, above 1 packs voices toward the center. Defaults so older patches load. */
+  detuneCurve: z.number().min(0.5).max(3).default(1),
   blend: unit,
   spread: unit,
   phase: unit,
@@ -121,7 +123,7 @@ export type PatchEdit = { [K in keyof Patch]?: Patch[K] extends object ? Partial
 
 const osc = (enabled: boolean, name: string): z.infer<typeof Oscillator> => ({
   enabled, table: { kind: "builtin", name }, position: 0, level: 0.75, pan: 0,
-  octave: 0, semi: 0, fine: 0, unison: 1, detune: 0.25, blend: 0.75, spread: 0.5,
+  octave: 0, semi: 0, fine: 0, unison: 1, detune: 0.25, detuneCurve: 1, blend: 0.75, spread: 0.5,
   phase: 0, randomPhase: 1, warp: "off", warpAmount: 0, toFilter: true,
 })
 const env = (attack: number, decay: number, sustain: number, release: number) => ({ attack, decay, sustain, release })

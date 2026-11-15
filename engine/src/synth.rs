@@ -21,11 +21,11 @@
 //! Master volume is not applied here: the engine applies it after the FX chain.
 
 use crate::dsp::Smoother;
-use crate::envelope::{Adsr, Envelope};
+use crate::envelope::{Adsr, EnvParams, Envelope};
 use crate::instrument::Instrument;
 use crate::modulation::{apply, rand01, GlobalMod, ModMatrix, ModVoice, TARGET_SLOTS};
 use crate::params::*;
-use crate::wavetable::{builtin_tables, Wavetable, FRAMES};
+use crate::wavetable::{builtin_tables, Wavetable, CUBIC_LEVELS, FRAMES, MIP_LEVELS};
 
 pub const MAX_VOICES: usize = 8;
 pub const MAX_UNISON: usize = 16;
@@ -44,6 +44,11 @@ const DRIFT_CENTS: f32 = 6.0;
 const WANDER_CENTS: f32 = 4.0;
 /// Drift 1: each voice's cutoff sits up to this many octaves off.
 const DRIFT_CUTOFF_OCTAVES: f32 = 0.12;
+/// Drift 1: each unison voice sits up to this many cents off its slot.
+const UNISON_DRIFT_CENTS: f32 = 3.0;
+/// Drift 1: each voice's amp attack, decay and release are up to this
+/// fraction longer or shorter (Diva's "Variance").
+const ENV_VARIANCE: f32 = 0.08;
 /// Seconds the wander takes to ease toward each new random target.
 const WANDER_GLIDE: f32 = 0.6;
 /// Drive 1: input gain into the filter's saturator.
@@ -117,16 +122,46 @@ fn tanh_fast(x: f32) -> f32 {
     x * (27.0 + x2) / (27.0 + 9.0 * x2)
 }
 
-/// Filter input saturation at drive `d` (0..1): identity at 0, then a
-/// tanh curve that also lifts quiet signals by up to +6 dB.
+/// Antiderivative of `tanh_fast`: u^2/18 + (4/3) ln(9u^2 + 27) inside the
+/// clamp, continuing with slope 1 beyond it.
 #[inline]
-fn drive_sat(x: f32, d: f32) -> f32 {
+fn tanh_fast_integral(u: f64) -> f64 {
+    let a = u.abs();
+    if a <= 3.0 {
+        u * u / 18.0 + (4.0 / 3.0) * (9.0 * u * u + 27.0).ln()
+    } else {
+        0.5 + (4.0 / 3.0) * 108.0f64.ln() + (a - 3.0)
+    }
+}
+
+/// First-order antiderivative anti-aliasing of `tanh_fast` between the last
+/// input and this one (Parker, Zavalishin & Le Bivic, DAFx-16): the average of
+/// the curve over the step, which suppresses the aliasing a plain tanh makes.
+#[inline]
+fn tanh_adaa(u: f32, prev: f32) -> f32 {
+    let du = u as f64 - prev as f64;
+    if du.abs() < 1e-4 {
+        return tanh_fast(0.5 * (u + prev));
+    }
+    ((tanh_fast_integral(u as f64) - tanh_fast_integral(prev as f64)) / du) as f32
+}
+
+/// Filter input saturation at drive `d` (0..1): identity at 0, then an
+/// anti-aliased tanh curve that also lifts quiet signals by up to +6 dB.
+/// `prev` holds the last (x, u) for the anti-aliasing.
+#[inline]
+fn drive_sat(x: f32, d: f32, prev: &mut (f32, f32)) -> f32 {
+    let k = 1.0 + DRIVE_GAIN * d;
+    let u = k * x / VOICE_GAIN;
+    let (px, pu) = *prev;
+    *prev = (x, u);
     if d <= 0.0 {
         return x;
     }
-    let k = 1.0 + DRIVE_GAIN * d;
-    let sat = VOICE_GAIN * tanh_fast(k * x / VOICE_GAIN) / k * (1.0 + d);
-    x + (4.0 * d).min(1.0) * (sat - x)
+    // ADAA is centred half a sample back; blend against the matching dry sample.
+    let dry = 0.5 * (x + px);
+    let sat = VOICE_GAIN * tanh_adaa(u, pu) / k * (1.0 + d);
+    dry + (4.0 * d).min(1.0) * (sat - dry)
 }
 
 /// Unison stack state for one oscillator of one voice.
@@ -143,7 +178,11 @@ struct UniOsc {
     /// Voices processed this tick (n, or the old n while removed voices fade out).
     n_proc: usize,
     mip: usize,
+    /// How much of mip level `mip + 1` to blend in (0 = none).
+    mip_w: f32,
     table: usize,
+    /// Per-unison-voice drift, -1..1, rolled when the note starts.
+    udrift: [f32; MAX_UNISON],
 }
 
 impl UniOsc {
@@ -157,7 +196,9 @@ impl UniOsc {
         n: 1,
         n_proc: 1,
         mip: 0,
+        mip_w: 0.0,
         table: 0,
+        udrift: [0.0; MAX_UNISON],
     };
 
     /// Jump straight to `t` (fresh voice).
@@ -170,6 +211,7 @@ impl UniOsc {
         self.n = t.n;
         self.n_proc = t.n;
         self.mip = t.mip;
+        self.mip_w = t.mip_w;
         self.table = t.table;
     }
 
@@ -191,6 +233,7 @@ impl UniOsc {
         self.n_proc = n_proc;
         self.n = t.n;
         self.mip = t.mip;
+        self.mip_w = t.mip_w;
         self.table = t.table;
     }
 
@@ -199,6 +242,9 @@ impl UniOsc {
         for p in self.phase.iter_mut() {
             let x = phase + random_phase * rand01(rng);
             *p = x - x.floor();
+        }
+        for d in self.udrift.iter_mut() {
+            *d = rand01(rng) * 2.0 - 1.0;
         }
     }
 }
@@ -211,6 +257,7 @@ struct OscTarget {
     gr: [f32; MAX_UNISON],
     n: usize,
     mip: usize,
+    mip_w: f32,
     table: usize,
     /// Center-voice phase increment (the sub follows osc A's).
     center_inc: f32,
@@ -236,11 +283,15 @@ struct Voice {
     glide_step: f32,
     /// Fixed per-voice drift, -1..1 each: osc A, osc B, cutoff. Scaled by the drift knob.
     drift: [f32; 3],
-    /// Slow random pitch wander, -1..1, easing toward `wander_to`.
-    wander: f32,
-    wander_to: f32,
-    /// Control ticks until the next wander target.
-    wander_ticks: u32,
+    /// Slow random pitch wander per oscillator (A, B), -1..1, easing toward `wander_to`.
+    wander: [f32; 2],
+    wander_to: [f32; 2],
+    /// Control ticks until each oscillator's next wander target.
+    wander_ticks: [u32; 2],
+    /// Per-voice envelope time variance, -1..1 (attack, decay, release).
+    env_var: [f32; 3],
+    /// This voice's amp envelope coefficients (the knobs, varied by drift).
+    envp: EnvParams,
     velocity: f32,
     gate: bool,
     env: Envelope,
@@ -256,6 +307,8 @@ struct Voice {
     sub_inc: f32,
     sub_mip: usize,
     noise: Noise,
+    /// Filter drive anti-aliasing history per channel: (x, u) of the last sample.
+    adaa: [(f32, f32); 2],
 }
 
 impl Voice {
@@ -265,9 +318,11 @@ impl Voice {
             pitch: 0.0,
             glide_step: 0.0,
             drift: [0.0; 3],
-            wander: 0.0,
-            wander_to: 0.0,
-            wander_ticks: 0,
+            wander: [0.0; 2],
+            wander_to: [0.0; 2],
+            wander_ticks: [0; 2],
+            env_var: [0.0; 3],
+            envp: EnvParams { attack_inc: 1.0, decay_coef: 0.0, sustain: 0.0, release_coef: 0.0 },
             velocity: 0.0,
             gate: false,
             env: Envelope::IDLE,
@@ -283,6 +338,7 @@ impl Voice {
             sub_inc: 0.0,
             sub_mip: 0,
             noise: Noise { rng: [1, 2], dark: [0.0; 2], prev: [0.0; 2] },
+            adaa: [(0.0, 0.0); 2],
         }
     }
     fn active(&self) -> bool {
@@ -340,6 +396,8 @@ struct OscKnobs {
     unison: usize,
     phase: f32,
     random_phase: f32,
+    /// Unison detune curve exponent (1 = linear).
+    curve: f32,
 }
 
 impl OscKnobs {
@@ -361,6 +419,7 @@ impl OscKnobs {
             unison: 1,
             phase: 0.0,
             random_phase: 1.0,
+            curve: 1.0,
         }
     }
 
@@ -443,6 +502,8 @@ fn osc_targets(
     off: &[f32; TARGET_SLOTS],
     pitch: f32,
     cents: f32,
+    udrift: &[f32; MAX_UNISON],
+    udrift_cents: f32,
     velocity: f32,
     layout: &UnisonLayout,
     sample_rate: f32,
@@ -463,6 +524,7 @@ fn osc_targets(
         gr: [0.0; MAX_UNISON],
         n,
         mip: 0,
+        mip_w: 0.0,
         table: k.table,
         center_inc,
         position: apply(ids.position, k.position.value, o(ids.position)),
@@ -471,9 +533,13 @@ fn osc_targets(
     };
     let mut power = 0.0;
     let mut max_inc = 0.0f32;
+    // Each unison voice drifts a little off its slot (single voices drift via `cents`).
+    let ud = if n > 1 { udrift_cents } else { 0.0 };
     for u in 0..n {
         let x = layout.x[n][u];
-        let inc = (center_inc * semitone_ratio(x * detune)).min(0.5);
+        // Detune curve: >1 packs voices toward the center (Vital's detune power, Serum's Super/Exp).
+        let xc = if k.curve == 1.0 { x } else { x.signum() * x.abs().powf(k.curve) };
+        let inc = (center_inc * semitone_ratio(xc * detune + ud * udrift[u] / 100.0)).min(0.5);
         t.inc[u] = inc;
         max_inc = max_inc.max(inc);
         let w = if layout.center[n][u] { 1.0 } else { blend };
@@ -481,7 +547,10 @@ fn osc_targets(
         // Stereo position: inner voices are pushed outward (|x|^0.25) so a full
         // spread is genuinely wide, not mostly-center. Constant-power pan,
         // compensated so a centered voice is 1.0 per side.
-        let p = (pan + x.signum() * x.abs().sqrt().sqrt() * spread).clamp(-1.0, 1.0);
+        // Mirror pairs alternate sides outward from the center (Surge flips odd
+        // voices), so each channel gets sharp and flat voices and the image doesn't lean.
+        let side = if u.min(n - 1 - u) % 2 == 0 { 1.0 } else { -1.0 };
+        let p = (pan + side * x.signum() * x.abs().sqrt().sqrt() * spread).clamp(-1.0, 1.0);
         t.gl[u] = w * (1.0 - p).sqrt();
         t.gr[u] = w * (1.0 + p).sqrt();
     }
@@ -491,7 +560,7 @@ fn osc_targets(
         t.gl[u] *= norm;
         t.gr[u] *= norm;
     }
-    t.mip = Wavetable::level_for(max_inc * sample_rate, sample_rate);
+    (t.mip, t.mip_w) = Wavetable::level_blend(max_inc * sample_rate, sample_rate);
     t
 }
 
@@ -571,11 +640,11 @@ fn voice_targets(k: &Knobs, m: &ModMatrix, v: &Voice, layout: &UnisonLayout, sam
         m.offsets(&v.mods.sources(m, v.env.level), &mut off);
     }
     let o = |id: u32| off[id as usize];
-    let wander = k.drift * WANDER_CENTS * v.wander;
-    let cents_a = k.drift * DRIFT_CENTS * v.drift[0] + wander;
-    let cents_b = k.drift * DRIFT_CENTS * v.drift[1] + wander;
-    let a = osc_targets(&k.a, &IDS_A, &off, v.pitch, cents_a, v.velocity, layout, sample_rate);
-    let b = osc_targets(&k.b, &IDS_B, &off, v.pitch, cents_b, v.velocity, layout, sample_rate);
+    let cents_a = k.drift * (DRIFT_CENTS * v.drift[0] + WANDER_CENTS * v.wander[0]);
+    let cents_b = k.drift * (DRIFT_CENTS * v.drift[1] + WANDER_CENTS * v.wander[1]);
+    let ud = k.drift * UNISON_DRIFT_CENTS;
+    let a = osc_targets(&k.a, &IDS_A, &off, v.pitch, cents_a, &v.a.udrift, ud, v.velocity, layout, sample_rate);
+    let b = osc_targets(&k.b, &IDS_B, &off, v.pitch, cents_b, &v.b.udrift, ud, v.velocity, layout, sample_rate);
     // Keytrack around C4, and each voice's own slightly-off cutoff.
     let track = (k.keytrack * (v.pitch - 60.0) / 12.0 + k.drift * DRIFT_CUTOFF_OCTAVES * v.drift[2]).exp2();
     let cutoff = (apply(FILTER_CUTOFF, k.log_cutoff.value.exp(), o(FILTER_CUTOFF)) * track).clamp(20.0, 0.45 * sample_rate);
@@ -831,14 +900,17 @@ impl WavetableSynth {
             }
             v.mods.advance(m, CONTROL, &mut self.rng);
             if self.knobs.drift > 0.0 {
-                if v.wander_ticks == 0 {
-                    v.wander_to = rand01(&mut self.rng) * 2.0 - 1.0;
-                    // A new target every 0.5..2 s.
-                    v.wander_ticks = ((0.5 + 1.5 * rand01(&mut self.rng)) * sr / CONTROL as f32) as u32;
+                for o in 0..2 {
+                    if v.wander_ticks[o] == 0 {
+                        v.wander_to[o] = rand01(&mut self.rng) * 2.0 - 1.0;
+                        // A new target every 0.5..2 s.
+                        v.wander_ticks[o] = ((0.5 + 1.5 * rand01(&mut self.rng)) * sr / CONTROL as f32) as u32;
+                    }
+                    v.wander_ticks[o] -= 1;
+                    v.wander[o] += (v.wander_to[o] - v.wander[o]) * wander_k;
                 }
-                v.wander_ticks -= 1;
-                v.wander += (v.wander_to - v.wander) * wander_k;
             }
+            v.envp = voice_env(&self.env1, self.knobs.drift, &v.env_var, sr);
             if v.glide_step != 0.0 {
                 v.pitch += v.glide_step;
                 let target = v.note as f32;
@@ -861,7 +933,6 @@ impl WavetableSynth {
     fn render_segment(&mut self, left: &mut [f32], right: &mut [f32]) {
         let m = left.len();
         debug_assert!(m <= CONTROL);
-        let env = self.env1.params;
         let tables = &self.tables;
         let sub_pos = match self.knobs.x.sub_shape {
             0 => 0.0,
@@ -945,17 +1016,19 @@ impl WavetableSynth {
                 let c1 = SvfCoefs::new(c[C_G], c[C_K1]);
                 let c2 = SvfCoefs::new(c[C_G], c[C_K2]);
                 let d = c[C_DRIVE];
-                let yl = v.fl[0].lowpass(&c1, drive_sat(fl[i], d));
+                let yl = v.fl[0].lowpass(&c1, drive_sat(fl[i], d, &mut v.adaa[0]));
                 let yl = v.fl[1].lowpass(&c2, yl);
-                let yr = v.fr[0].lowpass(&c1, drive_sat(fr[i], d));
+                let yr = v.fr[0].lowpass(&c1, drive_sat(fr[i], d, &mut v.adaa[1]));
                 let yr = v.fr[1].lowpass(&c2, yr);
                 if d > 0.0 {
+                    // The resonance lives in the second (high-Q) stage: saturating its
+                    // band-pass state inside the loop rounds the peak off as drive rises.
                     let a = (d * 2.0 / VOICE_GAIN) * (d * 2.0 / VOICE_GAIN);
-                    v.fl[0].limit(a);
-                    v.fr[0].limit(a);
+                    v.fl[1].limit(a);
+                    v.fr[1].limit(a);
                 }
                 let mix = c[C_MIX];
-                let amp = v.env.next(&env);
+                let amp = v.env.next(&v.envp);
                 left[i] += (fl[i] + (yl - fl[i]) * mix + dl[i]) * amp;
                 right[i] += (fr[i] + (yr - fr[i]) * mix + dr[i]) * amp;
                 if !v.active() {
@@ -983,18 +1056,54 @@ fn render_unison(
     [fl, fr, dl, dr]: [&mut [f32; CONTROL]; 4],
 ) {
     let m = cs.len();
+    let blend = o.mip_w > 0.0 && o.mip + 1 < MIP_LEVELS;
     let mut offs = [(0usize, 0usize, 0.0f32); CONTROL];
-    for (off, c) in offs.iter_mut().zip(cs) {
-        *off = table.frame_offsets(o.mip, c[pos]);
+    let mut next = [(0usize, 0usize, 0.0f32); CONTROL];
+    for i in 0..m {
+        offs[i] = table.frame_offsets(o.mip, cs[i][pos]);
+        if blend {
+            next[i] = table.frame_offsets(o.mip + 1, cs[i][pos]);
+        }
     }
     let mut al = [0.0f32; CONTROL];
     let mut ar = [0.0f32; CONTROL];
+    let bufs = (&offs[..m], &next[..m], &mut al, &mut ar);
+    match (o.mip <= CUBIC_LEVELS, blend) {
+        (false, false) => unison_stack::<false, false>(o, table, bufs),
+        (false, true) => unison_stack::<false, true>(o, table, bufs),
+        (true, false) => unison_stack::<true, false>(o, table, bufs),
+        (true, true) => unison_stack::<true, true>(o, table, bufs),
+    }
+    for i in 0..m {
+        let g = cs[i][gain];
+        let t = cs[i][tof];
+        let (l, r) = (al[i] * g, ar[i] * g);
+        fl[i] += l * t;
+        fr[i] += r * t;
+        dl[i] += l * (1.0 - t);
+        dr[i] += r * (1.0 - t);
+    }
+}
+
+/// The unison voices of one oscillator for a segment, summed into `al`/`ar`.
+/// `CUBIC` picks Catmull-Rom phase interpolation; `BLEND` crossfades into the
+/// next mip level (`next` offsets) by `o.mip_w`.
+#[inline(always)]
+fn unison_stack<const CUBIC: bool, const BLEND: bool>(
+    o: &mut UniOsc,
+    table: &Wavetable,
+    (offs, next, al, ar): (&[(usize, usize, f32)], &[(usize, usize, f32)], &mut [f32; CONTROL], &mut [f32; CONTROL]),
+) {
+    let read = |(b0, b1, ff): (usize, usize, f32), ph: f32| if CUBIC { table.read_cubic(b0, b1, ff, ph) } else { table.read(b0, b1, ff, ph) };
+    let w = o.mip_w;
     for u in 0..o.n_proc {
         let (mut ph, inc) = (o.phase[u], o.inc[u]);
         let (mut gl, mut gr, dgl, dgr) = (o.gl[u], o.gr[u], o.dgl[u], o.dgr[u]);
-        for i in 0..m {
-            let (b0, b1, ff) = offs[i];
-            let s = table.read(b0, b1, ff, ph);
+        for i in 0..offs.len() {
+            let mut s = read(offs[i], ph);
+            if BLEND {
+                s += (read(next[i], ph) - s) * w;
+            }
             ph += inc;
             if ph >= 1.0 {
                 ph -= 1.0;
@@ -1008,15 +1117,16 @@ fn render_unison(
         o.gl[u] = gl;
         o.gr[u] = gr;
     }
-    for i in 0..m {
-        let g = cs[i][gain];
-        let t = cs[i][tof];
-        let (l, r) = (al[i] * g, ar[i] * g);
-        fl[i] += l * t;
-        fr[i] += r * t;
-        dl[i] += l * (1.0 - t);
-        dr[i] += r * (1.0 - t);
+}
+
+/// A voice's amp envelope: the knobs, with drift-scaled per-voice time variance.
+#[inline]
+fn voice_env(env: &Adsr, drift: f32, var: &[f32; 3], sample_rate: f32) -> EnvParams {
+    if drift <= 0.0 {
+        return env.params;
     }
+    let s = |i: usize| 1.0 + ENV_VARIANCE * drift * var[i];
+    env.scaled([s(0), s(1), s(2)], sample_rate)
 }
 
 impl Instrument for WavetableSynth {
@@ -1074,10 +1184,9 @@ impl Instrument for WavetableSynth {
             v.b.start(k.b.phase, k.b.random_phase, &mut self.rng);
             v.noise.rng = [self.rng | 1, self.rng.rotate_left(16) | 1];
             rand01(&mut self.rng);
-            for d in v.drift.iter_mut() {
+            for d in v.drift.iter_mut().chain(v.env_var.iter_mut()).chain(v.wander.iter_mut()) {
                 *d = rand01(&mut self.rng) * 2.0 - 1.0;
             }
-            v.wander = rand01(&mut self.rng) * 2.0 - 1.0;
             v.wander_to = v.wander;
             let t = voice_targets(k, &self.matrix, v, &self.layout, sr);
             v.ctl = t.ctl;
@@ -1086,6 +1195,7 @@ impl Instrument for WavetableSynth {
             v.sub_inc = t.sub_inc;
             v.sub_mip = t.sub_mip;
         }
+        v.envp = voice_env(&self.env1, self.knobs.drift, &v.env_var, sr);
         self.shadow = Shadow { note, env1: v.env, mods: v.mods };
     }
 
@@ -1214,6 +1324,8 @@ impl WavetableSynth {
             FILTER_DRIVE => self.knobs.drive.target = value.clamp(0.0, 1.0),
             FILTER_KEYTRACK => self.knobs.keytrack = value.clamp(0.0, 1.0),
             VOICE_DRIFT => self.knobs.drift = value.clamp(0.0, 1.0),
+            OSC_A_DETUNE_CURVE => self.knobs.a.curve = value.clamp(0.5, 3.0),
+            OSC_B_DETUNE_CURVE => self.knobs.b.curve = value.clamp(0.5, 3.0),
             _ => {}
         }
     }
@@ -1394,12 +1506,18 @@ mod tests {
 
     #[test]
     fn drive_zero_is_exactly_clean() {
+        let mut h = (0.0, 0.0);
         for x in [-0.9f32, -0.2, 0.0, 0.05, 0.4, 1.3] {
-            assert_eq!(drive_sat(x, 0.0), x);
+            assert_eq!(drive_sat(x, 0.0, &mut h), x);
         }
-        // Driven: quiet signals lift by up to +6 dB, loud ones saturate.
-        assert!((drive_sat(0.001, 1.0) / 0.001 - 2.0).abs() < 0.01);
-        assert!(drive_sat(10.0, 1.0) < VOICE_GAIN * 2.0 / (1.0 + DRIVE_GAIN) + 1e-6);
+        // Driven (steady input, so the anti-aliasing history has settled):
+        // quiet signals lift by up to +6 dB, loud ones saturate.
+        let steady = |x: f32| {
+            let mut h = (x, (1.0 + DRIVE_GAIN) * x / VOICE_GAIN);
+            drive_sat(x, 1.0, &mut h)
+        };
+        assert!((steady(0.001) / 0.001 - 2.0).abs() < 0.01);
+        assert!(steady(10.0) < VOICE_GAIN * 2.0 / (1.0 + DRIVE_GAIN) + 1e-6);
     }
 
     #[test]
@@ -1456,5 +1574,108 @@ mod tests {
         // Voices differ from each other and from true pitch.
         assert!(offsets.iter().any(|c| c.abs() > 0.5));
         assert!(offsets.windows(2).any(|w| (w[0] - w[1]).abs() > 0.5));
+    }
+
+    #[test]
+    fn tanh_fast_integral_differentiates_back() {
+        for u in [-5.0f64, -3.0, -1.7, -0.2, 0.0, 0.4, 1.1, 2.9, 3.0, 4.5] {
+            let h = 1e-4;
+            let d = (tanh_fast_integral(u + h) - tanh_fast_integral(u - h)) / (2.0 * h);
+            assert!((d - tanh_fast(u as f32) as f64).abs() < 1e-4, "u {u}: {d} vs {}", tanh_fast(u as f32));
+        }
+        // ADAA of a held input is the curve itself.
+        assert!((tanh_adaa(0.7, 0.7) - tanh_fast(0.7)).abs() < 1e-6);
+    }
+
+    /// Level of `freq` in `x` relative to the signal's RMS (Goertzel).
+    fn tone_share(x: &[f32], freq: f32) -> f32 {
+        let w = 2.0 * core::f32::consts::PI * freq / 48000.0;
+        let c = 2.0 * w.cos();
+        let (mut s1, mut s2) = (0.0f32, 0.0f32);
+        for &v in x {
+            let s = v + c * s1 - s2;
+            s2 = s1;
+            s1 = s;
+        }
+        let mag = (s1 * s1 + s2 * s2 - c * s1 * s2).sqrt() * 2.0 / x.len() as f32;
+        let rms = (x.iter().map(|v| v * v).sum::<f32>() / x.len() as f32).sqrt();
+        mag / rms
+    }
+
+    #[test]
+    fn drive_rounds_off_the_resonant_peak() {
+        let share = |drive: f32| {
+            let mut s = WavetableSynth::new(48000.0);
+            s.set_param(OSC_A_POSITION, 0.67);
+            s.set_param(FILTER_CUTOFF, 500.0);
+            s.set_param(FILTER_RESONANCE, 1.0);
+            s.set_param(FILTER_DRIVE, drive);
+            for n in [36, 43, 48] {
+                s.note_on(n, 1.0);
+            }
+            let (mut l, mut r) = (vec![0.0; 48000], vec![0.0; 48000]);
+            s.render(&mut l, &mut r);
+            tone_share(&l[12000..], 500.0)
+        };
+        let (clean, driven) = (share(0.0), share(1.0));
+        assert!(driven < clean * 0.8, "clean {clean} driven {driven}");
+    }
+
+    fn targets(curve: f32, spread: f32) -> OscTarget {
+        let l = UnisonLayout::new();
+        let mut k = OscKnobs::new(true, 3000.0);
+        k.unison = 7;
+        k.detune.value = 1.0;
+        k.spread.value = spread;
+        k.curve = curve;
+        osc_targets(&k, &IDS_A, &[0.0; TARGET_SLOTS], 60.0, 0.0, &[0.0; MAX_UNISON], 0.0, 1.0, &l, 48000.0)
+    }
+
+    fn semis(t: &OscTarget, u: usize) -> f32 {
+        (t.inc[u] / t.center_inc).log2() * 12.0
+    }
+
+    #[test]
+    fn unison_sides_each_get_sharp_and_flat_voices() {
+        let t = targets(1.0, 1.0);
+        let mean = |g: &[f32; MAX_UNISON]| {
+            let (mut num, mut den) = (0.0, 0.0);
+            for u in 0..7 {
+                num += g[u] * semis(&t, u);
+                den += g[u];
+            }
+            num / den
+        };
+        // Flat-left/sharp-right put the side means well off center.
+        assert!(mean(&t.gl).abs() < 0.25 && mean(&t.gr).abs() < 0.25, "{} {}", mean(&t.gl), mean(&t.gr));
+    }
+
+    #[test]
+    fn detune_curve_packs_voices_toward_the_center() {
+        assert!(semis(&targets(2.0, 0.5), 1).abs() < semis(&targets(1.0, 0.5), 1).abs() * 0.8);
+        // The outer voices stay at the full detune.
+        assert!((semis(&targets(2.0, 0.5), 6) - 1.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn drift_moves_each_oscillator_and_varies_envelopes() {
+        let mut s = WavetableSynth::new(48000.0);
+        s.set_param(VOICE_DRIFT, 1.0);
+        s.set_param(OSC_B_ENABLED, 1.0);
+        for n in [48u8, 52, 55, 60, 64, 67] {
+            s.note_on(n, 1.0);
+        }
+        render_ms(&mut s, 50);
+        let a = s.unison_freqs(60, 0)[0];
+        let b = s.unison_freqs(60, 1)[0];
+        assert!((1200.0 * (a / b).log2()).abs() > 0.1, "A and B drift apart");
+        let rel: Vec<f32> = s.voices.iter().filter(|v| v.active()).map(|v| v.envp.release_coef).collect();
+        assert!(rel.windows(2).any(|w| w[0] != w[1]), "release times vary per voice");
+        // No drift: every voice shares the knobs' envelope exactly.
+        let mut s = WavetableSynth::new(48000.0);
+        s.note_on(60, 1.0);
+        s.note_on(64, 1.0);
+        render_ms(&mut s, 5);
+        assert!(s.voices.iter().filter(|v| v.active()).all(|v| v.envp.release_coef == s.env1.params.release_coef));
     }
 }

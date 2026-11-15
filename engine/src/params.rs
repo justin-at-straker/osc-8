@@ -193,5 +193,10 @@ pub const FILTER_KEYTRACK: u32 = 168;
 /// oscillator and filter offset, plus a slow random pitch wander.
 pub const VOICE_DRIFT: u32 = 169;
 
+/// Unison detune curve per oscillator, 0.5..3: voice positions become
+/// sign(x)|x|^curve (1 = linear; above 1 packs voices near the center).
+pub const OSC_A_DETUNE_CURVE: u32 = 170;
+pub const OSC_B_DETUNE_CURVE: u32 = 171;
+
 /// Number of parameter IDs this engine understands (max ID + 1).
-pub const PARAM_COUNT: u32 = 170;
+pub const PARAM_COUNT: u32 = 172;

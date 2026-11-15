@@ -370,8 +370,8 @@ export const FACTORY_PRESETS: Patch[] = [
   }),
   // ---- Showcase: big unison stacks ----
   preset("super-saw", "LD Super Saw", {
-    oscA: { table: table("basic"), position: 0.66, level: 0.75, unison: 9, detune: 0.3, blend: 0.85, spread: 1 },
-    oscB: { enabled: true, table: table("basic"), position: 0.66, octave: 1, level: 0.4, unison: 7, detune: 0.25, blend: 0.8, spread: 1 },
+    oscA: { table: table("basic"), position: 0.66, level: 0.75, unison: 9, detune: 0.4, detuneCurve: 1.5, blend: 0.85, spread: 1 },
+    oscB: { enabled: true, table: table("basic"), position: 0.66, octave: 1, level: 0.4, unison: 7, detune: 0.32, detuneCurve: 1.5, blend: 0.8, spread: 1 },
     sub: { enabled: true, level: 0.3, octave: -1, shape: "sine" },
     filter: { cutoff: 6500, resonance: 0.15, keytrack: 0.3 },
     voicing: { drift: 0.25 },
@@ -387,8 +387,8 @@ export const FACTORY_PRESETS: Patch[] = [
     master: { volume: 0.6 },
   }),
   preset("wide-strings", "PD Wide Strings", {
-    oscA: { table: table("basic"), position: 0.6, level: 0.65, unison: 11, detune: 0.2, blend: 0.75, spread: 1 },
-    oscB: { enabled: true, table: table("pwm"), position: 0.35, level: 0.45, unison: 7, detune: 0.18, blend: 0.7, spread: 1 },
+    oscA: { table: table("basic"), position: 0.6, level: 0.65, unison: 11, detune: 0.26, detuneCurve: 1.5, blend: 0.75, spread: 1 },
+    oscB: { enabled: true, table: table("pwm"), position: 0.35, level: 0.45, unison: 7, detune: 0.24, detuneCurve: 1.5, blend: 0.7, spread: 1 },
     filter: { cutoff: 2400, resonance: 0.1, keytrack: 0.3 },
     voicing: { drift: 0.4 },
     env1: { attack: 0.6, decay: 1, sustain: 0.9, release: 2 },

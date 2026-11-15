@@ -52,6 +52,12 @@ impl Adsr {
         Self { attack, decay, sustain, release, params: EnvParams::new(attack, decay, sustain, release, sample_rate) }
     }
 
+    /// Coefficients with the attack, decay and release times scaled by `scale`
+    /// (per-voice analog variance).
+    pub fn scaled(&self, scale: [f32; 3], sample_rate: f32) -> EnvParams {
+        EnvParams::new(self.attack * scale[0], self.decay * scale[1], self.sustain, self.release * scale[2], sample_rate)
+    }
+
     /// Set stage `index` (0 attack, 1 decay, 2 sustain, 3 release) and refresh coefficients.
     pub fn set(&mut self, index: usize, value: f32, sample_rate: f32) {
         match index {

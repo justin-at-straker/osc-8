@@ -4,7 +4,10 @@
 //! defined as a harmonic spectrum and rendered once per mip level (one level
 //! per octave), keeping only the harmonics that fit under Nyquist for the
 //! notes that level serves. Playback picks the mip level from the note's
-//! frequency and linearly interpolates within and between frames.
+//! frequency, crossfading into the next level near each boundary so
+//! brightness falls smoothly with pitch instead of in octave steps, and
+//! interpolates within frames (cubic on the low levels, linear above) and
+//! linearly between frames.
 
 #![allow(clippy::needless_range_loop)] // loops index by harmonic number
 
@@ -15,8 +18,15 @@ pub const MAX_HARMONICS: usize = TABLE_SIZE / 2;
 /// Mip levels: level `k` keeps harmonics `1..=MAX_HARMONICS >> k`.
 pub const MIP_LEVELS: usize = 11;
 pub const FRAMES: usize = 16;
-/// One guard sample per frame so interpolation never wraps.
-const STRIDE: usize = TABLE_SIZE + 1;
+/// Guard samples so interpolation never wraps: one before each frame, two after.
+const STRIDE: usize = TABLE_SIZE + 3;
+/// Aliases that fold back above this frequency are inaudible (hearing
+/// thresholds rise steeply above ~15 kHz; Valimaki, Pekonen & Nam, JASA 2012),
+/// so a level may keep harmonics up to `sample_rate - ALIAS_FLOOR_HZ`.
+pub const ALIAS_FLOOR_HZ: f32 = 18000.0;
+/// Levels at or below this read with cubic interpolation: they are stored at
+/// only 1x-4x oversampling, where linear interpolation is audibly noisy.
+pub const CUBIC_LEVELS: usize = 2;
 
 pub const BUILTIN_NAMES: [&str; 5] = ["basic", "pwm", "harmonic-sweep", "formant", "digital"];
 
@@ -51,11 +61,13 @@ impl Wavetable {
                     let peak = buf_re.iter().fold(0.0f32, |m, v| m.max(v.abs()));
                     gain = if peak > 1e-9 { 1.0 / peak } else { 0.0 };
                 }
-                let base = (level * frames + f) * STRIDE;
+                let base = (level * frames + f) * STRIDE + 1;
                 for i in 0..TABLE_SIZE {
                     data[base + i] = buf_re[i] * gain;
                 }
+                data[base - 1] = data[base + TABLE_SIZE - 1];
                 data[base + TABLE_SIZE] = data[base];
+                data[base + TABLE_SIZE + 1] = data[base + 1];
             }
         }
         Self { data, frames }
@@ -64,12 +76,25 @@ impl Wavetable {
     /// Mip level for a fundamental of `freq_hz` at `sample_rate`.
     #[inline]
     pub fn level_for(freq_hz: f32, sample_rate: f32) -> usize {
-        let max_h = (sample_rate * 0.5 / freq_hz.max(1.0)) as usize;
-        let mut level = 0;
-        while level < MIP_LEVELS - 1 && (MAX_HARMONICS >> level) > max_h {
-            level += 1;
+        Self::level_blend(freq_hz, sample_rate).0
+    }
+
+    /// The level to play and how much of the next (darker) level to blend in.
+    /// Level `k` serves the octave where its top harmonic stays under
+    /// `sample_rate - ALIAS_FLOOR_HZ`; over the top quarter of that octave the
+    /// blend fades to the next level, so crossing the boundary is seamless.
+    #[inline]
+    pub fn level_blend(freq_hz: f32, sample_rate: f32) -> (usize, f32) {
+        let top = (sample_rate - ALIAS_FLOOR_HZ).max(sample_rate * 0.5);
+        let allowed = top / freq_hz.max(1.0);
+        // Level k keeps MAX_HARMONICS >> k harmonics: the first that fits is ceil(x).
+        let x = (MAX_HARMONICS as f32 / allowed).log2();
+        let level = (x.ceil().max(0.0) as usize).min(MIP_LEVELS - 1);
+        if level + 1 >= MIP_LEVELS {
+            return (level, 0.0);
         }
-        level
+        let frac = x - (level as f32 - 1.0); // (0, 1] across the level's octave
+        (level, ((frac - 0.75) * 4.0).clamp(0.0, 1.0))
     }
 
     /// Sample at `phase` in 0..1, morph `position` in 0..1, at mip `level`.
@@ -82,8 +107,8 @@ impl Wavetable {
         let p = phase * TABLE_SIZE as f32;
         let i = (p as usize).min(TABLE_SIZE - 1);
         let fr = p - i as f32;
-        let b0 = (level * self.frames + f0) * STRIDE + i;
-        let b1 = (level * self.frames + f1) * STRIDE + i;
+        let b0 = (level * self.frames + f0) * STRIDE + 1 + i;
+        let b1 = (level * self.frames + f1) * STRIDE + 1 + i;
         let a = self.data[b0] + (self.data[b0 + 1] - self.data[b0]) * fr;
         let b = self.data[b1] + (self.data[b1 + 1] - self.data[b1]) * fr;
         a + (b - a) * ff
@@ -98,7 +123,7 @@ impl Wavetable {
         let f0 = (fpos as usize).min(self.frames - 1);
         let f1 = (f0 + 1).min(self.frames - 1);
         let base = level * self.frames;
-        ((base + f0) * STRIDE, (base + f1) * STRIDE, fpos - f0 as f32)
+        ((base + f0) * STRIDE + 1, (base + f1) * STRIDE + 1, fpos - f0 as f32)
     }
 
     /// Sample at `phase` (0..1) between the frames from [`Wavetable::frame_offsets`].
@@ -115,9 +140,23 @@ impl Wavetable {
         a + (b - a) * ff
     }
 
+    /// [`Wavetable::read`] with 4-point Catmull-Rom interpolation in phase.
+    #[inline(always)]
+    pub fn read_cubic(&self, b0: usize, b1: usize, ff: f32, phase: f32) -> f32 {
+        let p = phase * TABLE_SIZE as f32;
+        let i = (p as usize).min(TABLE_SIZE - 1);
+        let t = p - i as f32;
+        // Offsets point at sample 0 with one guard before and two after, so i - 1 ..= i + 2 is in range.
+        let d = &self.data[b0 + i - 1..b0 + i + 3];
+        let e = &self.data[b1 + i - 1..b1 + i + 3];
+        let a = crate::dsp::catmull_rom(d[0], d[1], d[2], d[3], t);
+        let b = crate::dsp::catmull_rom(e[0], e[1], e[2], e[3], t);
+        a + (b - a) * ff
+    }
+
     /// Raw frame access for tests and visualisation.
     pub fn frame(&self, level: usize, frame: usize) -> &[f32] {
-        let base = (level * self.frames + frame) * STRIDE;
+        let base = (level * self.frames + frame) * STRIDE + 1;
         &self.data[base..base + TABLE_SIZE]
     }
 }
@@ -335,5 +374,48 @@ mod tests {
         assert!(rough(t.frame(8, saw)) < rough(t.frame(0, saw)) * 0.5);
         assert_eq!(Wavetable::level_for(20.0, 48000.0), 0);
         assert!(Wavetable::level_for(4000.0, 48000.0) >= 7);
+    }
+
+    #[test]
+    fn mip_blend_has_no_brightness_step_at_boundaries() {
+        // Effective top harmonic frequency of the (level, blend) mix.
+        let top = |f: f32| {
+            let (l, w) = Wavetable::level_blend(f, 48000.0);
+            let h = |k: usize| (MAX_HARMONICS >> k) as f32 * f;
+            if w > 0.0 { h(l) * (1.0 - w) + h(l + 1) * w } else { h(l) }
+        };
+        let mut f = 30.0f32;
+        while f < 6000.0 {
+            let (a, b) = (top(f), top(f * 1.002));
+            assert!(b / a < 1.05 && a / b < 1.05, "step at {f} Hz: {a} -> {b}");
+            f *= 1.002;
+        }
+        // Worst-case bandwidth stays near 15 kHz (was 12 kHz at the bottom of each level).
+        let mut f = 100.0f32;
+        while f < 1500.0 {
+            let (l, w) = Wavetable::level_blend(f, 48000.0);
+            if w == 0.0 {
+                assert!((MAX_HARMONICS >> l) as f32 * f > 14_900.0, "{f} Hz tops out at {}", (MAX_HARMONICS >> l) as f32 * f);
+            }
+            f *= 1.01;
+        }
+    }
+
+    #[test]
+    fn cubic_read_beats_linear_on_low_levels() {
+        // A pure sine table: any deviation is interpolation error.
+        let t = Wavetable::from_spectra(1, |_, _re, im| im[1] = 1.0);
+        let (b0, b1, ff) = t.frame_offsets(1, 0.0);
+        let (mut el, mut ec) = (0.0f64, 0.0f64);
+        for n in 0..4096 {
+            let ph = (n as f32 * 0.618_034) % 1.0;
+            let exact = (2.0 * PI * ph).sin();
+            el += ((t.read(b0, b1, ff, ph) - exact) as f64).powi(2);
+            ec += ((t.read_cubic(b0, b1, ff, ph) - exact) as f64).powi(2);
+        }
+        assert!(ec < el / 10.0, "cubic error {ec} vs linear {el}");
+        // Guard samples: reads at the frame edges stay continuous.
+        assert!(t.read_cubic(b0, b1, ff, 0.0).abs() < 1e-3);
+        assert!(t.read_cubic(b0, b1, ff, 0.99999).abs() < 1e-2);
     }
 }

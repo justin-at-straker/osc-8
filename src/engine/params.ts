@@ -104,6 +104,8 @@ export const PARAMS = [
   [167, "filter.drive", (p: Patch) => p.filter.drive], // 0 clean .. 1 saturated input, tamed resonance
   [168, "filter.keytrack", (p: Patch) => p.filter.keytrack], // 0..1 octaves of cutoff per octave, around C4
   [169, "voicing.drift", (p: Patch) => p.voicing.drift], // 0..1 analog drift: per-voice detune, wander, cutoff offset
+  [170, "oscA.detuneCurve", (p: Patch) => p.oscA.detuneCurve], // 0.5..3, 1 = linear unison spacing
+  [171, "oscB.detuneCurve", (p: Patch) => p.oscB.detuneCurve],
 ] as const
 
 export type ParamKey = (typeof PARAMS)[number][1]

@@ -66,7 +66,7 @@ impl Effect for Chorus {
                 for v in 0..VOICES {
                     let ph = self.phase + v as f32 / VOICES as f32 + side as f32 * 0.25;
                     let d = (BASE_MS[v] + side as f32 * SIDE_OFFSET_MS + depth * MOD_MS * fast_sin(ph)) * ms;
-                    acc += self.lines[side].read(d);
+                    acc += self.lines[side].read_cubic(d);
                 }
                 // Between 1/N (coherent voices) and 1/sqrt(N) (fully decorrelated).
                 *w = acc * WET_GAIN;

@@ -252,7 +252,7 @@ fn log_cutoff_modulation_is_symmetric_in_octaves_and_clamped() {
 #[test]
 fn readback_and_global_fx_targets() {
     let mut e = Engine::new(SR);
-    assert_eq!(osc8_engine::modulation::TARGET_SLOTS, 170);
+    assert_eq!(osc8_engine::modulation::TARGET_SLOTS, 172);
     e.set_param(OSC_A_POSITION, 0.8);
     e.set_param(FX_REVERB_ENABLED, 1.0);
     e.set_param(FX_REVERB_MIX, 0.5);

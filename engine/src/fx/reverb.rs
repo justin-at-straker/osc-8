@@ -22,6 +22,13 @@ const MAX_SCALE: f32 = 1.6;
 const DIFFUSERS: [(f32, f32); 4] = [(4.7, 0.65), (3.6, 0.65), (12.7, 0.55), (9.3, 0.55)];
 const STEREO_SPREAD_MS: f32 = 0.53;
 const WET_GAIN: f32 = 0.6;
+/// Lines whose reads are slowly modulated, with their LFO rates (Hz). Moving
+/// delay taps smear the FDN's fixed modes so the tail doesn't ring metallic
+/// (Dattorro, Effect Design Part 1, 1.3.7: ~1 Hz, a few samples deep).
+const MOD_LINES: [usize; 4] = [0, 3, 5, 6];
+const MOD_HZ: [f32; 4] = [0.53, 0.71, 0.97, 1.27];
+/// Peak excursion at size 1, ms (scaled with the room).
+const MOD_MS: f32 = 0.25;
 
 struct Allpass {
     line: DelayLine,
@@ -53,6 +60,9 @@ pub struct Reverb {
     diff: [[Allpass; 4]; 2],
     /// Per-line loop gains, refreshed per block.
     gains: [f32; LINES],
+    /// Quadrature oscillators (cos, sin) for the modulated lines, and their per-sample rotations.
+    lfo: [(f32, f32); 4],
+    rot: [(f32, f32); 4],
 }
 
 impl Reverb {
@@ -75,6 +85,15 @@ impl Reverb {
             damp: [OnePole::default(); LINES],
             diff: [diff(0), diff(1)],
             gains: [0.0; LINES],
+            // Start a quarter turn apart so the lines never move together.
+            lfo: core::array::from_fn(|j| {
+                let a = j as f32 * core::f32::consts::FRAC_PI_2;
+                (a.cos(), a.sin())
+            }),
+            rot: core::array::from_fn(|j| {
+                let w = 2.0 * core::f32::consts::PI * MOD_HZ[j] / sample_rate;
+                (w.cos(), w.sin())
+            }),
         };
         r.update_block_params();
         r
@@ -141,6 +160,12 @@ impl Effect for Reverb {
             self.damping.next();
         }
         self.update_block_params();
+        // Keep the rotating oscillators on the unit circle.
+        for (c, s) in self.lfo.iter_mut() {
+            let g = 1.0 / (*c * *c + *s * *s).sqrt();
+            *c *= g;
+            *s *= g;
+        }
         for i in 0..n {
             let scale = Self::scale(self.size.next());
             let mix = self.mix.next();
@@ -151,9 +176,16 @@ impl Effect for Reverb {
                 dl = self.diff[0][k].process(dl);
                 dr = self.diff[1][k].process(dr);
             }
+            let mut wobble = [0.0f32; LINES];
+            for j in 0..4 {
+                let (c, s) = self.lfo[j];
+                let (rc, rs) = self.rot[j];
+                self.lfo[j] = (c * rc - s * rs, c * rs + s * rc);
+                wobble[MOD_LINES[j]] = s * MOD_MS * scale * ms;
+            }
             let mut v = [0.0f32; LINES];
             for k in 0..LINES {
-                let out = self.lines[k].read(LINE_MS[k] * scale * ms);
+                let out = self.lines[k].read(LINE_MS[k] * scale * ms + wobble[k]);
                 v[k] = self.damp[k].lowpass(out) * self.gains[k];
             }
             let (mut wl, mut wr) = (0.0, 0.0);

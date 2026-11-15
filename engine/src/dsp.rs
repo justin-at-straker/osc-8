@@ -83,6 +83,18 @@ impl DelayLine {
         a + (b - a) * frac
     }
 
+    /// Read `delay` samples back (>= 2) with 4-point Catmull-Rom interpolation:
+    /// keeps the top end that linear interpolation dulls on a modulated delay
+    /// (Dattorro, Effect Design Part 2, 4.3). Read before `push`.
+    #[inline]
+    pub fn read_cubic(&self, delay: f32) -> f32 {
+        let d = delay.clamp(2.0, self.max_delay() - 1.0);
+        let i = d as usize;
+        let t = d - i as f32;
+        let at = |k: usize| self.buf[self.write.wrapping_sub(k) & self.mask];
+        catmull_rom(at(i - 1), at(i), at(i + 1), at(i + 2), t)
+    }
+
     /// Read an integer number of samples back (>= 1).
     #[inline]
     pub fn tap(&self, delay: usize) -> f32 {
@@ -94,6 +106,12 @@ impl DelayLine {
         self.buf[self.write] = x;
         self.write = (self.write + 1) & self.mask;
     }
+}
+
+/// 4-point Catmull-Rom interpolation between `x0` (t = 0) and `x1` (t = 1).
+#[inline(always)]
+pub fn catmull_rom(xm1: f32, x0: f32, x1: f32, x2: f32, t: f32) -> f32 {
+    x0 + 0.5 * t * (x1 - xm1 + t * (2.0 * xm1 - 5.0 * x0 + 4.0 * x1 - x2 + t * (3.0 * (x0 - x1) + x2 - xm1)))
 }
 
 /// One-pole lowpass.

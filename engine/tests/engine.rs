@@ -61,7 +61,8 @@ fn param_ids_match_params_ts() {
     }
     assert_eq!(BASE_PARAM_COUNT as usize, ids.len());
     assert_eq!(MOD_END, 131);
-    assert_eq!(PARAM_COUNT, 170);
+    assert_eq!(PARAM_COUNT, 172);
+    assert_eq!((OSC_A_DETUNE_CURVE, OSC_B_DETUNE_CURVE), (170, 171));
     assert_eq!((FILTER_DRIVE, FILTER_KEYTRACK, VOICE_DRIFT), (167, 168, 169));
     assert_eq!((VOICE_MODE, VOICE_LEGATO, GLIDE_TIME), (164, 165, 166));
 }
@@ -282,4 +283,21 @@ fn stop_releases_everything() {
     let (l, _) = render_offline(SR, &ev, 48000);
     assert!(rms(&l[6000..12000]) > 0.05);
     assert!(l[36000..].iter().all(|&v| v == 0.0));
+}
+
+#[test]
+fn master_clipper_is_linear_below_the_knee_and_bounded() {
+    use osc8_engine::engine::{soft_clip, CLIP_KNEE};
+    for i in -100..=100 {
+        let x = i as f32 / 100.0 * CLIP_KNEE;
+        assert_eq!(soft_clip(x), x);
+    }
+    let mut last = soft_clip(CLIP_KNEE);
+    for i in 1..1000 {
+        let y = soft_clip(CLIP_KNEE + i as f32 * 0.01);
+        assert!(y >= last && y <= 1.0, "monotonic and bounded");
+        last = y;
+    }
+    assert_eq!(soft_clip(-3.0), -soft_clip(3.0));
+    assert_eq!(soft_clip(f32::NAN), 0.0);
 }

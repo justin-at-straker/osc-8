@@ -230,10 +230,23 @@ impl Engine {
     }
 }
 
-/// tanh soft clipper: transparent at low level, never exceeds +-1. NaN becomes silence.
+/// Below this level the master clipper passes the signal untouched.
+pub const CLIP_KNEE: f32 = 0.8;
+
+/// Output safety clipper: exactly linear up to `CLIP_KNEE`, then a tanh knee
+/// that never exceeds +-1. Unlike a full-range tanh it adds no distortion to a
+/// normal mix (Vital's final stage is likewise only a safety limit). NaN becomes silence.
 #[inline]
 pub fn soft_clip(x: f32) -> f32 {
-    if x.is_nan() { 0.0 } else { x.tanh() }
+    if x.is_nan() {
+        return 0.0;
+    }
+    let a = x.abs();
+    if a <= CLIP_KNEE {
+        return x;
+    }
+    let room = 1.0 - CLIP_KNEE;
+    (CLIP_KNEE + room * ((a - CLIP_KNEE) / room).tanh()).copysign(x)
 }
 
 /// Something to do at a given frame in an offline render.

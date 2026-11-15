@@ -102,6 +102,7 @@ function OscControls({ osc, name, def, p }: { osc: OscKey; name: string; def: (t
           resetValue={1}
         />
         <ParamKnob param={p("detune")} label={`${name} detune`} legend="Detune" {...unit} color="green" resetValue={def.detune} />
+        <ParamKnob param={p("detuneCurve")} label={`${name} detune curve`} legend="Curve" min={0.5} max={3} step={0.01} format={{ maximumFractionDigits: 2 }} color="green" resetValue={def.detuneCurve} />
         <ParamKnob param={p("blend")} label={`${name} blend`} legend="Blend" {...unit} color="green" resetValue={def.blend} />
         <ParamKnob param={p("spread")} label={`${name} spread`} legend="Spread" {...unit} color="green" resetValue={def.spread} />
       </div>
