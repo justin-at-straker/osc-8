@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
-import { getState, resetHistory, setDrumPattern, setPattern, setTransport } from "@/state/store"
+import { editKit, getState, replacePatch, resetHistory, setDrumPattern, setPattern, setTransport } from "@/state/store"
+import { loadStartup } from "@/state/startup"
 import { DEMO_DRUMS } from "@/engine/drums"
 import { Hardware } from "@/components/ui/hardware"
 import { Toasts, notify } from "@/components/ui/toaster"
@@ -12,11 +13,21 @@ import { AppMenubar, DEFAULT_PRESET_ID, DEMO_BPM, DEMO_PATTERN, OscPage, loadPre
 const client = new EngineClient()
 connectLiveMod()
 
-// Start on a warm keys sound playing a familiar melody, with a clean undo history.
-loadPresetById(DEFAULT_PRESET_ID)
-setPattern(DEMO_PATTERN, "load")
-setDrumPattern(DEMO_DRUMS, "load")
-setTransport({ bpm: DEMO_BPM })
+// Start on the session saved with File > Save as startup default, or the
+// factory demo (80s Poly Brass hook + groove), with a clean undo history.
+const saved = loadStartup()
+if (saved) {
+  replacePatch(saved.patch, "load")
+  setPattern(saved.pattern, "load")
+  setDrumPattern(saved.drums.pattern, "load")
+  editKit(saved.drums.kit, "load")
+  setTransport({ bpm: saved.bpm })
+} else {
+  loadPresetById(DEFAULT_PRESET_ID)
+  setPattern(DEMO_PATTERN, "load")
+  setDrumPattern(DEMO_DRUMS, "load")
+  setTransport({ bpm: DEMO_BPM })
+}
 resetHistory()
 
 export function App() {

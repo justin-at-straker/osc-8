@@ -22,6 +22,8 @@ import { onSoundChange, setSoundEnabled, soundEnabled } from "@/lib/sound"
 import { defaultPatch } from "@/engine/patch"
 import { canRedo, canUndo, redo, replacePatch, setPattern, setTransport, undo, useStore } from "@/state/store"
 import { exportPatch, importPatch } from "@/state/patch-files"
+import { clearStartup, saveStartup } from "@/state/startup"
+import { notify } from "@/components/ui/toaster"
 import { loadPresetById, PRESETS_BY_CATEGORY, stepPreset } from "./preset-state"
 import { togglePlay } from "./transport-actions"
 import type { EngineControls } from "./types"
@@ -32,6 +34,8 @@ export type AppMenubarProps = {
   onOpenKeys?: () => void
   /** Report a failure (e.g. a bad patch file) to the person. */
   onError?: (message: string) => void
+  /** Confirm something worked (e.g. a toast). */
+  onNotice?: (title: string, description?: string) => void
   showHints: boolean
   onShowHintsChange: (on: boolean) => void
 }
@@ -72,7 +76,7 @@ function panic(engine: EngineControls) {
   for (let note = 0; note < 128; note++) engine.noteOff(note)
 }
 
-export function AppMenubar({ engine, onOpenKeys, onError, showHints, onShowHintsChange }: AppMenubarProps) {
+export function AppMenubar({ engine, onOpenKeys, onError, onNotice = (title, description) => notify({ title, description }), showHints, onShowHintsChange }: AppMenubarProps) {
   const playing = useStore((s) => s.transport.playing)
   const audio = useStore((s) => s.audio)
   // Re-read undo depth whenever the patch changes.
@@ -89,6 +93,13 @@ export function AppMenubar({ engine, onOpenKeys, onError, showHints, onShowHints
         return void stepPreset(-1)
       case "import-patch":
         return importPatch().catch((e: Error) => onError?.(e.message))
+      case "save-startup":
+        return saveStartup()
+          ? onNotice?.("Saved as startup default", "OSC-8 will open with this sound, pattern, beat and tempo in this browser.")
+          : onError?.("Couldn't save: this browser blocks local storage.")
+      case "reset-startup":
+        clearStartup()
+        return onNotice?.("Startup default reset", "OSC-8 will open with the factory demo next time.")
       case "export-patch":
         return exportPatch()
       case "undo":
@@ -124,6 +135,9 @@ export function AppMenubar({ engine, onOpenKeys, onError, showHints, onShowHints
               "-",
               { value: "import-patch", label: "Import patch…" },
               { value: "export-patch", label: "Export patch…" },
+              "-",
+              { value: "save-startup", label: "Save as startup default" },
+              { value: "reset-startup", label: "Reset startup default" },
               "-",
               { value: "save-project", label: "Save project", disabled: true, hint: "Coming in M4" },
               { value: "export-wav", label: "Export WAV…", disabled: true, hint: "Coming in M4" },
