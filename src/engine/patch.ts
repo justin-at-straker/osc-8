@@ -109,6 +109,8 @@ export const Patch = z.object({
     voices: z.number().int().min(1).max(16),
     legato: z.boolean(),
     glide: z.number().min(0).max(2), // seconds
+    /** Analog drift: per-voice detune, slow pitch wander and cutoff offset. Defaults so older patches load. */
+    drift: unit.default(0),
   }),
   master: z.object({ volume: unit }),
 })
@@ -143,7 +145,7 @@ export function defaultPatch(id = "init"): Patch {
       ott: { enabled: false, depth: 0.5, time: 0.5 },
       eq: { enabled: false, low: 0, mid: 0, high: 0 },
     },
-    voicing: { mode: "poly", voices: 8, legato: false, glide: 0 },
+    voicing: { mode: "poly", voices: 8, legato: false, glide: 0, drift: 0 },
     master: { volume: 0.7 },
   }
 }

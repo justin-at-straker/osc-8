@@ -182,5 +182,16 @@ pub const VOICE_LEGATO: u32 = 165;
 /// Seconds, 0..2: time to glide to a new note (mono only; 0 = no glide).
 pub const GLIDE_TIME: u32 = 166;
 
+// Tone (IDs 167..169).
+
+/// 0..1: drives the filter input into soft saturation and limits the
+/// resonance loop (0 = clean, linear filter).
+pub const FILTER_DRIVE: u32 = 167;
+/// 0..1: cutoff follows the played pitch (1 = one octave per octave, around C4).
+pub const FILTER_KEYTRACK: u32 = 168;
+/// 0..1: analog drift. Each voice gets its own small fixed detune per
+/// oscillator and filter offset, plus a slow random pitch wander.
+pub const VOICE_DRIFT: u32 = 169;
+
 /// Number of parameter IDs this engine understands (max ID + 1).
-pub const PARAM_COUNT: u32 = 167;
+pub const PARAM_COUNT: u32 = 170;

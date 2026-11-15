@@ -101,6 +101,9 @@ export const PARAMS = [
   [164, "voicing.mode", (p: Patch) => (p.voicing.mode === "mono" ? 1 : 0)],
   [165, "voicing.legato", (p: Patch) => (p.voicing.legato ? 1 : 0)], // glide only between overlapping/touching notes, no retrigger
   [166, "voicing.glide", (p: Patch) => p.voicing.glide], // seconds, 0..2
+  [167, "filter.drive", (p: Patch) => p.filter.drive], // 0 clean .. 1 saturated input, tamed resonance
+  [168, "filter.keytrack", (p: Patch) => p.filter.keytrack], // 0..1 octaves of cutoff per octave, around C4
+  [169, "voicing.drift", (p: Patch) => p.voicing.drift], // 0..1 analog drift: per-voice detune, wander, cutoff offset
 ] as const
 
 export type ParamKey = (typeof PARAMS)[number][1]

@@ -38,6 +38,16 @@ const DETUNE_SEMITONES: f32 = 1.0;
 /// Noise color: the dark end is one-pole lowpassed white noise (brown-ish); the
 /// bright end is differentiated white noise (+6 dB/octave, violet-ish).
 const NOISE_DARK_HZ: f32 = 250.0;
+/// Drift 1: each oscillator sits up to this many cents off pitch, per voice.
+const DRIFT_CENTS: f32 = 6.0;
+/// Drift 1: the slow wander reaches this many cents either way.
+const WANDER_CENTS: f32 = 4.0;
+/// Drift 1: each voice's cutoff sits up to this many octaves off.
+const DRIFT_CUTOFF_OCTAVES: f32 = 0.12;
+/// Seconds the wander takes to ease toward each new random target.
+const WANDER_GLIDE: f32 = 0.6;
+/// Drive 1: input gain into the filter's saturator.
+const DRIVE_GAIN: f32 = 6.0;
 
 // Ramped per-voice control values.
 const C_G: usize = 0;
@@ -54,7 +64,8 @@ const C_GAIN_SUB: usize = 10;
 const C_GAIN_N: usize = 11;
 const C_COLOR: usize = 12;
 const C_TOF_N: usize = 13;
-const N_CTL: usize = 14;
+const C_DRIVE: usize = 14;
+const N_CTL: usize = 15;
 
 #[derive(Clone, Copy, Default)]
 struct SvfCoefs {
@@ -89,6 +100,33 @@ impl Svf {
         self.ic2 = 2.0 * v2 - self.ic2;
         v2
     }
+
+    /// Soft-limit the band-pass state: resonance grows warmer and rounder
+    /// instead of ringing on as drive rises. `a` = 0 leaves it untouched.
+    #[inline]
+    fn limit(&mut self, a: f32) {
+        self.ic1 /= (1.0 + a * self.ic1 * self.ic1).sqrt();
+    }
+}
+
+/// Pade tanh: within 0.1% of tanh up to |x| = 1, saturating at +-1 by |x| = 3.
+#[inline]
+fn tanh_fast(x: f32) -> f32 {
+    let x = x.clamp(-3.0, 3.0);
+    let x2 = x * x;
+    x * (27.0 + x2) / (27.0 + 9.0 * x2)
+}
+
+/// Filter input saturation at drive `d` (0..1): identity at 0, then a
+/// tanh curve that also lifts quiet signals by up to +6 dB.
+#[inline]
+fn drive_sat(x: f32, d: f32) -> f32 {
+    if d <= 0.0 {
+        return x;
+    }
+    let k = 1.0 + DRIVE_GAIN * d;
+    let sat = VOICE_GAIN * tanh_fast(k * x / VOICE_GAIN) / k * (1.0 + d);
+    x + (4.0 * d).min(1.0) * (sat - x)
 }
 
 /// Unison stack state for one oscillator of one voice.
@@ -196,6 +234,13 @@ struct Voice {
     pitch: f32,
     /// Semitones added per control tick while gliding (0 = not gliding).
     glide_step: f32,
+    /// Fixed per-voice drift, -1..1 each: osc A, osc B, cutoff. Scaled by the drift knob.
+    drift: [f32; 3],
+    /// Slow random pitch wander, -1..1, easing toward `wander_to`.
+    wander: f32,
+    wander_to: f32,
+    /// Control ticks until the next wander target.
+    wander_ticks: u32,
     velocity: f32,
     gate: bool,
     env: Envelope,
@@ -219,6 +264,10 @@ impl Voice {
             note: 0,
             pitch: 0.0,
             glide_step: 0.0,
+            drift: [0.0; 3],
+            wander: 0.0,
+            wander_to: 0.0,
+            wander_ticks: 0,
             velocity: 0.0,
             gate: false,
             env: Envelope::IDLE,
@@ -393,6 +442,7 @@ fn osc_targets(
     ids: &OscIds,
     off: &[f32; TARGET_SLOTS],
     pitch: f32,
+    cents: f32,
     velocity: f32,
     layout: &UnisonLayout,
     sample_rate: f32,
@@ -400,7 +450,7 @@ fn osc_targets(
     let o = |id: u32| if (id as usize) < TARGET_SLOTS { off[id as usize] } else { 0.0 };
     let semi = apply(ids.semi, k.semi, o(ids.semi));
     let fine = apply(ids.fine, k.fine, o(ids.fine));
-    let semis = pitch - 69.0 + 12.0 * k.octave + semi + fine / 100.0;
+    let semis = pitch - 69.0 + 12.0 * k.octave + semi + (fine + cents) / 100.0;
     let center_inc = 440.0 * (semis / 12.0).exp2() / sample_rate;
     let detune = apply(ids.detune, k.detune.value, o(ids.detune)) * DETUNE_SEMITONES;
     let pan = apply(ids.pan, k.pan.value, o(ids.pan));
@@ -465,6 +515,11 @@ struct Knobs {
     log_cutoff: Smoother,
     resonance: Smoother,
     filter_mix: Smoother,
+    drive: Smoother,
+    /// 0..1, octaves of cutoff per octave of pitch.
+    keytrack: f32,
+    /// 0..1 analog drift amount.
+    drift: f32,
 }
 
 impl Knobs {
@@ -476,7 +531,7 @@ impl Knobs {
         }
     }
 
-    fn extras(&mut self) -> [&mut Smoother; 9] {
+    fn extras(&mut self) -> [&mut Smoother; 10] {
         [
             &mut self.x.sub_enabled,
             &mut self.x.sub_level,
@@ -487,6 +542,7 @@ impl Knobs {
             &mut self.log_cutoff,
             &mut self.resonance,
             &mut self.filter_mix,
+            &mut self.drive,
         ]
     }
 
@@ -515,9 +571,14 @@ fn voice_targets(k: &Knobs, m: &ModMatrix, v: &Voice, layout: &UnisonLayout, sam
         m.offsets(&v.mods.sources(m, v.env.level), &mut off);
     }
     let o = |id: u32| off[id as usize];
-    let a = osc_targets(&k.a, &IDS_A, &off, v.pitch, v.velocity, layout, sample_rate);
-    let b = osc_targets(&k.b, &IDS_B, &off, v.pitch, v.velocity, layout, sample_rate);
-    let cutoff = apply(FILTER_CUTOFF, k.log_cutoff.value.exp(), o(FILTER_CUTOFF)).clamp(20.0, 0.45 * sample_rate);
+    let wander = k.drift * WANDER_CENTS * v.wander;
+    let cents_a = k.drift * DRIFT_CENTS * v.drift[0] + wander;
+    let cents_b = k.drift * DRIFT_CENTS * v.drift[1] + wander;
+    let a = osc_targets(&k.a, &IDS_A, &off, v.pitch, cents_a, v.velocity, layout, sample_rate);
+    let b = osc_targets(&k.b, &IDS_B, &off, v.pitch, cents_b, v.velocity, layout, sample_rate);
+    // Keytrack around C4, and each voice's own slightly-off cutoff.
+    let track = (k.keytrack * (v.pitch - 60.0) / 12.0 + k.drift * DRIFT_CUTOFF_OCTAVES * v.drift[2]).exp2();
+    let cutoff = (apply(FILTER_CUTOFF, k.log_cutoff.value.exp(), o(FILTER_CUTOFF)) * track).clamp(20.0, 0.45 * sample_rate);
     let res = apply(FILTER_RESONANCE, k.resonance.value, o(FILTER_RESONANCE)).clamp(0.0, 1.0);
     let x = &k.x;
 
@@ -538,6 +599,7 @@ fn voice_targets(k: &Knobs, m: &ModMatrix, v: &Voice, layout: &UnisonLayout, sam
     c[C_GAIN_N] = apply(NOISE_LEVEL, x.noise_level.value, o(NOISE_LEVEL)) * x.noise_enabled.value * vel;
     c[C_COLOR] = apply(NOISE_COLOR, x.noise_color.value, o(NOISE_COLOR));
     c[C_TOF_N] = x.noise_to_filter.value;
+    c[C_DRIVE] = k.drive.value;
 
     let sub_inc = (a.center_inc * x.sub_octave.exp2()).min(0.5);
     VoiceTargets { ctl: c, a, b, sub_inc, sub_mip: Wavetable::level_for(sub_inc * sample_rate, sample_rate) }
@@ -656,6 +718,9 @@ impl WavetableSynth {
                 log_cutoff: s(4000.0f32.ln(), 0.01),
                 resonance: s(0.2, 0.01),
                 filter_mix: s(1.0, 0.01),
+                drive: s(0.0, 0.01),
+                keytrack: 0.0,
+                drift: 0.0,
             },
             matrix: ModMatrix::new(sample_rate),
             shadow: Shadow { note: 60, env1: Envelope::IDLE, mods: ModVoice::IDLE },
@@ -759,11 +824,21 @@ impl WavetableSynth {
 
         let sr = self.sample_rate;
         let k = 1.0 / CONTROL as f32;
+        let wander_k = 1.0 - (-(CONTROL as f32) / (WANDER_GLIDE * sr)).exp();
         for v in self.voices.iter_mut() {
             if !v.active() {
                 continue;
             }
             v.mods.advance(m, CONTROL, &mut self.rng);
+            if self.knobs.drift > 0.0 {
+                if v.wander_ticks == 0 {
+                    v.wander_to = rand01(&mut self.rng) * 2.0 - 1.0;
+                    // A new target every 0.5..2 s.
+                    v.wander_ticks = ((0.5 + 1.5 * rand01(&mut self.rng)) * sr / CONTROL as f32) as u32;
+                }
+                v.wander_ticks -= 1;
+                v.wander += (v.wander_to - v.wander) * wander_k;
+            }
             if v.glide_step != 0.0 {
                 v.pitch += v.glide_step;
                 let target = v.note as f32;
@@ -869,10 +944,16 @@ impl WavetableSynth {
                 let c = &cs[i];
                 let c1 = SvfCoefs::new(c[C_G], c[C_K1]);
                 let c2 = SvfCoefs::new(c[C_G], c[C_K2]);
-                let yl = v.fl[0].lowpass(&c1, fl[i]);
+                let d = c[C_DRIVE];
+                let yl = v.fl[0].lowpass(&c1, drive_sat(fl[i], d));
                 let yl = v.fl[1].lowpass(&c2, yl);
-                let yr = v.fr[0].lowpass(&c1, fr[i]);
+                let yr = v.fr[0].lowpass(&c1, drive_sat(fr[i], d));
                 let yr = v.fr[1].lowpass(&c2, yr);
+                if d > 0.0 {
+                    let a = (d * 2.0 / VOICE_GAIN) * (d * 2.0 / VOICE_GAIN);
+                    v.fl[0].limit(a);
+                    v.fr[0].limit(a);
+                }
                 let mix = c[C_MIX];
                 let amp = v.env.next(&env);
                 left[i] += (fl[i] + (yl - fl[i]) * mix + dl[i]) * amp;
@@ -993,6 +1074,11 @@ impl Instrument for WavetableSynth {
             v.b.start(k.b.phase, k.b.random_phase, &mut self.rng);
             v.noise.rng = [self.rng | 1, self.rng.rotate_left(16) | 1];
             rand01(&mut self.rng);
+            for d in v.drift.iter_mut() {
+                *d = rand01(&mut self.rng) * 2.0 - 1.0;
+            }
+            v.wander = rand01(&mut self.rng) * 2.0 - 1.0;
+            v.wander_to = v.wander;
             let t = voice_targets(k, &self.matrix, v, &self.layout, sr);
             v.ctl = t.ctl;
             v.a.set(&t.a);
@@ -1125,6 +1211,9 @@ impl WavetableSynth {
             VOICE_MODE => self.set_mono(value >= 0.5),
             VOICE_LEGATO => self.voicing.legato = value >= 0.5,
             GLIDE_TIME => self.voicing.glide = value.clamp(0.0, 2.0),
+            FILTER_DRIVE => self.knobs.drive.target = value.clamp(0.0, 1.0),
+            FILTER_KEYTRACK => self.knobs.keytrack = value.clamp(0.0, 1.0),
+            VOICE_DRIFT => self.knobs.drift = value.clamp(0.0, 1.0),
             _ => {}
         }
     }
@@ -1301,5 +1390,71 @@ mod tests {
         render_ms(&mut s, 50);
         let mid = s.unison_freqs(60, 0)[0];
         assert!(mid > hz(52.0) && mid < hz(57.0), "got {mid}");
+    }
+
+    #[test]
+    fn drive_zero_is_exactly_clean() {
+        for x in [-0.9f32, -0.2, 0.0, 0.05, 0.4, 1.3] {
+            assert_eq!(drive_sat(x, 0.0), x);
+        }
+        // Driven: quiet signals lift by up to +6 dB, loud ones saturate.
+        assert!((drive_sat(0.001, 1.0) / 0.001 - 2.0).abs() < 0.01);
+        assert!(drive_sat(10.0, 1.0) < VOICE_GAIN * 2.0 / (1.0 + DRIVE_GAIN) + 1e-6);
+    }
+
+    #[test]
+    fn driven_resonant_filter_stays_bounded() {
+        let mut s = WavetableSynth::new(48000.0);
+        s.set_param(OSC_A_POSITION, 0.67);
+        s.set_param(FILTER_CUTOFF, 300.0);
+        s.set_param(FILTER_RESONANCE, 1.0);
+        s.set_param(FILTER_DRIVE, 1.0);
+        for n in [36, 48, 55, 60, 64, 67, 72, 76] {
+            s.note_on(n, 1.0);
+        }
+        let (mut l, mut r) = (vec![0.0; 48000], vec![0.0; 48000]);
+        s.render(&mut l, &mut r);
+        let peak = l.iter().chain(&r).fold(0.0f32, |m, x| m.max(x.abs()));
+        assert!(peak.is_finite() && peak < 4.0, "peak {peak}");
+    }
+
+    #[test]
+    fn keytrack_moves_cutoff_with_pitch() {
+        let mut s = WavetableSynth::new(48000.0);
+        s.set_param(FILTER_CUTOFF, 1000.0);
+        s.set_param(FILTER_KEYTRACK, 1.0);
+        s.note_on(72, 1.0);
+        render_ms(&mut s, 5);
+        let (_, hz) = s.voice_cutoffs().next().unwrap();
+        assert!((hz / 2000.0 - 1.0).abs() < 0.01, "{hz}");
+    }
+
+    #[test]
+    fn drift_detunes_each_voice_a_little() {
+        let cents = |f: f32, n: f32| 1200.0 * (f / hz(n)).log2();
+        let mut s = WavetableSynth::new(48000.0);
+        s.note_on(60, 1.0);
+        render_ms(&mut s, 5);
+        assert!(cents(s.unison_freqs(60, 0)[0], 60.0).abs() < 0.01);
+
+        let mut s = WavetableSynth::new(48000.0);
+        s.set_param(VOICE_DRIFT, 1.0);
+        let mut offsets = Vec::new();
+        for n in [48u8, 52, 55, 60] {
+            s.note_on(n, 1.0);
+        }
+        for t in 0..20 {
+            render_ms(&mut s, 100);
+            for n in [48u8, 52, 55, 60] {
+                let c = cents(s.unison_freqs(n, 0)[0], n as f32);
+                assert!(c.abs() <= DRIFT_CENTS + WANDER_CENTS + 0.01, "{c}");
+                if t == 0 {
+                    offsets.push(c);
+                }
+            }
+        }
+        // Voices differ from each other and from true pitch.
+        assert!(offsets.iter().any(|c| c.abs() > 0.5));
+        assert!(offsets.windows(2).any(|w| (w[0] - w[1]).abs() > 0.5));
     }
 }

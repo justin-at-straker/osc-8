@@ -40,7 +40,7 @@ type Out = FromWorklet
 
 const BLOCK = 128
 /** Readback values for every param ID 0..163 (see `mod_values_ptr`). */
-const MOD_VALUES = 167
+const MOD_VALUES = 170
 /** Modulation readback rate. */
 const MOD_HZ = 30
 

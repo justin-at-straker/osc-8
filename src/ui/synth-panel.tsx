@@ -195,6 +195,10 @@ export function SynthPanel() {
           <Module title="Filter" power={{ param: "filter.enabled", label: "Filter enabled" }}>
             <ParamKnob param="filter.cutoff" label="Filter cutoff" legend="Cutoff" min={20} max={20000} step={1} taper={LOG} format={hertz} color="orange" resetValue={init.filter.cutoff} />
             <ParamKnob param="filter.resonance" label="Filter resonance" legend="Res" {...unit} resetValue={init.filter.resonance} />
+            <div data-osc-stack data-osc-filter-mini>
+              <ParamKnob param="filter.drive" label="Filter drive" legend="Drive" {...unit} color="orange" resetValue={init.filter.drive} />
+              <ParamKnob param="filter.keytrack" label="Filter keytrack" legend="Key" {...unit} resetValue={init.filter.keytrack} />
+            </div>
           </Module>
         </div>
       </TabsPanel>
@@ -216,9 +220,10 @@ export function SynthPanel() {
             <ParamKnob param="env1.sustain" label="Amp sustain" legend="Sustain" {...unit} color="green" resetValue={init.env1.sustain} />
             <ParamKnob param="env1.release" label="Amp release" legend="Release" min={0} max={20} step={0.001} taper={power(4)} format={seconds} color="green" resetValue={init.env1.release} />
           </Module>
-          <Module title="Glide">
+          <Module title="Voice">
             <GlideModeSwitch />
             <ParamKnob param="voicing.glide" label="Glide time" legend="Time" min={0} max={2} step={0.001} taper={power(3)} format={seconds} color="orange" resetValue={0.06} />
+            <ParamKnob param="voicing.drift" label="Analog drift" legend="Drift" {...unit} color="green" resetValue={init.voicing.drift} />
           </Module>
         </div>
       </TabsPanel>

@@ -172,3 +172,9 @@
   zoom: 0.62;
   margin-top: 0;
 }
+
+/* Filter drive and keytrack: two small knobs stacked beside cutoff and res. */
+[data-osc-filter-mini] {
+  zoom: 0.52;
+  gap: 0;
+}
