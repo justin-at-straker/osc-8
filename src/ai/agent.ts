@@ -49,6 +49,14 @@ Static sounds are boring; Serum-style sounds move. Add mod routes with setPatch 
 - FX movement: lfo -> fx.reverb.mix or fx.distortion.drive.
 Keep existing routes unless asked to change them (the mod array replaces the whole list; getPatch first if unsure). "Add movement"/"make it wobble" requests are about routes. The user can see routes as colored rings on knobs and in the MOD tab.
 
+## Drums (808 track)
+setDrums writes the beat on a separate 808-style drum machine (getDrums reads it). Use it when the request mentions drums, a beat, a groove with drums, or a genre where drums are implied by "make a track/loop". Drums don't go through the synth FX.
+- House/techno: kick on 0, 4, 8, 12; clap or snare on 4 and 12; closedHat on the off-beats 2, 6, 10, 14 (openHat there for house).
+- Hip-hop/boom bap (~90 bpm): kick on 0 and 7 or 10, snare on 4 and 12, 8th-note hats with velocity variation, swing 0.25-0.4.
+- Trap (~140 bpm, felt half-time): kick on 0 and syncopated (e.g. 3, 10, 11), snare/clap on 8 only, 16th hats with a few rolls; long 808 kick (decay 0.8+).
+- DnB (~174): kick on 0 and 10, snare on 4 and 12, busy 16th hats; breakbeat-ish ghost snares at low velocity.
+- Accent the downbeat; vary hat velocities; leave space.
+
 ## Writing music
 setPattern replaces the one-bar, 16-step loop the synth plays (getPattern reads it). Use it when the request asks for notes, a line, a melody, a groove, a riff, a bassline, an arp, or a genre/vibe ("a rolling dnb bassline", "something like a house stab"). A request can need both: design the sound with setPatch AND write the notes with setPattern.
 - Pick a key and stay in its scale; say which in your reply. Minor keys suit dark/bass music.
@@ -76,7 +84,7 @@ export type RunSoundAgentOptions = {
 function contextLine() {
   const p = getState().patch
   const table = p.oscA.table.kind === "builtin" ? p.oscA.table.name : p.oscA.table.kind
-  return `Current patch "${p.name}": oscA ${table} pos ${p.oscA.position} oct ${p.oscA.octave} semi ${p.oscA.semi}; filter ${p.filter.enabled ? "on" : "off"} cutoff ${Math.round(p.filter.cutoff)} Hz res ${p.filter.resonance}; amp env A ${p.env1.attack} D ${p.env1.decay} S ${p.env1.sustain} R ${p.env1.release}; volume ${p.master.volume}. Built-in tables: ${BUILTIN_TABLES.join(", ")}. Pattern: ${getState().pattern.notes.length} notes over 16 steps at ${getState().transport.bpm} bpm.`
+  return `Current patch "${p.name}": oscA ${table} pos ${p.oscA.position} oct ${p.oscA.octave} semi ${p.oscA.semi}; filter ${p.filter.enabled ? "on" : "off"} cutoff ${Math.round(p.filter.cutoff)} Hz res ${p.filter.resonance}; amp env A ${p.env1.attack} D ${p.env1.decay} S ${p.env1.sustain} R ${p.env1.release}; volume ${p.master.volume}. Built-in tables: ${BUILTIN_TABLES.join(", ")}. Pattern: ${getState().pattern.notes.length} notes over 16 steps at ${getState().transport.bpm} bpm. Drums: ${getState().drums.pattern.hits.length} hits.`
 }
 
 function describeTool(name: string, input: unknown): string {
@@ -94,6 +102,11 @@ function describeTool(name: string, input: unknown): string {
     return typeof n === "number" ? `writing ${n} notes` : "writing notes"
   }
   if (name === "getPattern") return "reading pattern"
+  if (name === "setDrums") {
+    const n = (input as { hits?: unknown[] } | undefined)?.hits?.length
+    return typeof n === "number" ? `programming ${n} drum hits` : "tuning the drum kit"
+  }
+  if (name === "getDrums") return "reading drums"
   if (name === "snapshot" || name === "query") return "reading panel"
   if (name === "getPatch") return "reading patch"
   return name

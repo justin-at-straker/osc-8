@@ -6,7 +6,8 @@ import { jsonSchema, tool, type ToolSet } from "ai"
 import { z } from "zod"
 import { BUILTIN_TABLES, Patch, type PatchEdit } from "@/engine/patch"
 import { ALL_PARAM_KEYS, MOD_TARGETS } from "@/engine/params"
-import { editPatch, getState, setPattern, setTransport } from "@/state/store"
+import { editKit, editPatch, getState, setDrumPattern, setPattern, setTransport } from "@/state/store"
+import { DRUM_VOICES, DrumKit } from "@/engine/drums"
 import type { UiAgent } from "./ui-agent"
 
 /** Patch fields the M1 engine actually renders. Everything else validates and is stored, but is silent for now. */
@@ -127,6 +128,16 @@ export function createPatchTools() {
       inputSchema: jsonSchema<Record<string, unknown>>(z.toJSONSchema(SetPatchInput, { io: "input" }) as never),
       execute: async (input) => applySetPatch(input),
     }),
+    getDrums: tool({
+      description: "Returns the 808 drum track: its 16-step pattern (hits with step, voice, velocity, accent) and the kit settings.",
+      inputSchema: z.object({}),
+      execute: async () => ({ pattern: getState().drums.pattern, kit: getState().drums.kit }),
+    }),
+    setDrums: tool({
+      description: SET_DRUMS_DESCRIPTION,
+      inputSchema: jsonSchema<Record<string, unknown>>(z.toJSONSchema(SetDrumsInput, { io: "input" }) as never),
+      execute: async (input) => applySetDrums(input),
+    }),
     getPattern: tool({
       description: "Returns the current 16-step pattern (notes with step, MIDI note, length in steps, velocity) and the tempo.",
       inputSchema: z.object({}),
@@ -205,3 +216,60 @@ export function createUiTools(agent: UiAgent, defs: readonly { name: string; des
   }
   return tools
 }
+
+// ---- Drums: the 808 track ----
+
+const KitEdit = z
+  .object({
+    voices: z
+      .partialRecord(z.enum(DRUM_VOICES), z.object({ level: z.number(), tune: z.number(), decay: z.number(), tone: z.number(), snappy: z.number(), pan: z.number(), mute: z.boolean() }).partial().strict())
+      .optional(),
+    accent: z.number().optional(),
+    level: z.number().optional(),
+    drive: z.number().optional(),
+    swing: z.number().optional(),
+  })
+  .strict()
+
+export const SetDrumsInput = z
+  .object({
+    hits: z
+      .array(
+        z
+          .object({
+            step: z.number().int().min(0).max(15),
+            voice: z.enum(DRUM_VOICES),
+            velocity: z.number().min(0.05).max(1).describe("0..1; vary hats (0.4-0.7) for groove, 0.8-1 for kicks/snares."),
+            accent: z.boolean().describe("808 accent: louder and punchier. Use sparingly, e.g. on the downbeat."),
+          })
+          .strict()
+      )
+      .max(176)
+      .optional()
+      .describe("Every hit of the new 16-step drum pattern (replaces it). Omit to keep the current beat and only change the kit."),
+    kit: KitEdit.optional().describe("Partial kit edit, all values 0..1 (pan -1..1): per-voice level/tune/decay/tone/snappy/pan/mute, bus accent/level/drive/swing."),
+    bpm: z.number().min(60).max(200).optional(),
+  })
+  .strict()
+
+export type SetDrumsResult = { ok: true; hits: number; bpm: number } | { ok: false; error: string }
+
+export function applySetDrums(input: unknown): SetDrumsResult {
+  const parsed = SetDrumsInput.safeParse(input)
+  if (!parsed.success) return { ok: false, error: z.prettifyError(parsed.error) }
+  const { hits, kit, bpm } = parsed.data
+  if (kit) {
+    const check = DrumKit.safeParse({ ...getState().drums.kit, ...kit, voices: Object.fromEntries(Object.entries(getState().drums.kit.voices).map(([v, p]) => [v, { ...p, ...(kit.voices?.[v as keyof typeof kit.voices] ?? {}) }])) })
+    if (!check.success) return { ok: false, error: z.prettifyError(check.error) }
+    editKit(kit, "ai")
+  }
+  if (hits) {
+    const unique = new Map(hits.map((h) => [`${h.step}:${h.voice}`, h]))
+    const sorted = [...unique.values()].sort((a, b) => a.step - b.step || DRUM_VOICES.indexOf(a.voice) - DRUM_VOICES.indexOf(b.voice))
+    setDrumPattern({ steps: 16, hits: sorted }, "ai")
+  }
+  if (bpm !== undefined) setTransport({ bpm: Math.round(bpm) })
+  return { ok: true, hits: getState().drums.pattern.hits.length, bpm: getState().transport.bpm }
+}
+
+const SET_DRUMS_DESCRIPTION = `Write the beat on the 808 drum machine track: a 16-step loop (one bar of 16ths, steps 0/4/8/12 are the beats) with voices ${DRUM_VOICES.join(", ")} (closedHat chokes openHat). Optionally edit the kit (e.g. kick decay 0.8 + tune 0.3 for a long sub 808, swing 0.3 for shuffle) and set bpm. Undo restores the previous beat.`
