@@ -16,6 +16,7 @@ export const MOD_SOURCES = [
   "velocity", "modwheel", "note", "random",
 ] as const
 export const DIST_TYPES = ["tube", "soft", "hard", "fold", "bitcrush"] as const
+export const DELAY_TIMES = ["1/4", "1/8", "1/8d", "1/16", "1/4t"] as const
 
 /** A wavetable reference: a built-in table, an imported sample, or a formula/spectrum table. */
 export const WavetableRef = z.discriminatedUnion("kind", [
@@ -98,7 +99,7 @@ export const Patch = z.object({
   fx: z.object({
     distortion: z.object({ enabled: z.boolean(), type: z.enum(DIST_TYPES), drive: unit, mix: unit }),
     chorus: z.object({ enabled: z.boolean(), rate: z.number().min(0.01).max(10), depth: unit, mix: unit }),
-    delay: z.object({ enabled: z.boolean(), time: z.enum(["1/4", "1/8", "1/8d", "1/16", "1/4t"]), feedback: unit, mix: unit, pingPong: z.boolean() }),
+    delay: z.object({ enabled: z.boolean(), time: z.enum(DELAY_TIMES), feedback: unit, mix: unit, pingPong: z.boolean() }),
     reverb: z.object({ enabled: z.boolean(), size: unit, decay: unit, damping: unit, mix: unit }),
     ott: z.object({ enabled: z.boolean(), depth: unit, time: unit }),
     eq: z.object({ enabled: z.boolean(), low: z.number().min(-12).max(12), mid: z.number().min(-12).max(12), high: z.number().min(-12).max(12) }),
