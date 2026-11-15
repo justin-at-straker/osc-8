@@ -3,49 +3,29 @@ import type { Note, Pattern } from "@/engine/protocol"
 const n = (step: number, note: number, length = 1, velocity = 0.75): Note => ({ step, note, length, velocity })
 
 /** The tempo the default groove is written for. */
-export const DEMO_BPM = 124
-
-// One bar of the funk bassline, transposed to `root`: the root on the one, a
-// ghost on the "a" of 1, the octave pop on 2, then a walk up the minor
-// pentatonic and back down into the next bar. `end` replaces the last beat.
-function funkBar(bar: number, root: number, end: [number, number, number, number]): Note[] {
-  const at = bar * 16
-  return [
-    n(at + 0, root, 2, 0.95),
-    n(at + 3, root, 1, 0.55), // ghost
-    n(at + 4, root + 12, 1, 0.85), // octave pop
-    n(at + 6, root, 1, 0.7),
-    n(at + 7, root + 3, 1, 0.8),
-    n(at + 8, root + 5, 2, 0.9),
-    n(at + 10, root, 1, 0.6), // ghost
-    n(at + 11, root + 3, 1, 0.75),
-    n(at + 12, end[0], 1, 0.85),
-    n(at + 13, end[1], 1, 0.7),
-    n(at + 14, end[2], 1, 0.75),
-    n(at + 15, end[3], 1, 0.7),
-  ]
-}
-
-// Roots: the bass preset plays an octave down, so G3 (55) sounds as G2.
-const G = 55
-const C = 48
-const D = 50
+export const DEMO_BPM = 122
 
 /**
- * An original 4-bar funky house bassline in G minor for the default BS Funk
- * Machine preset: Gm | Gm | Cm | D. Syncopated, octave-popping and full of
- * ghost notes, with a run down the octave closing bar 2 and a D turnaround
- * pulling back to G.
+ * An original 4-bar disco-funk bassline for the default BS Funk Machine
+ * preset, over Em | C#m7b5 | Cmaj7 | D. Each bar lands on the root, climbs
+ * through chord tones with syncopated 16ths and ghost notes, and the D bar
+ * walks D# into the E at the top of the loop. Written in the roll's range;
+ * the preset's octave -1 puts it in the bass register.
  */
 export const DEMO_PATTERN: Pattern = {
   steps: 64,
   notes: [
-    ...funkBar(0, G, [62, 60, 58, 53]), // D C Bb F
-    ...funkBar(1, G, [67, 65, 62, 58]), // run down: G F D Bb
-    ...funkBar(2, C, [55, 53, 51, 50]), // G F Eb D
-    // Bar 4: D turnaround with the F# leading back to G.
-    n(48, D, 2, 0.95), n(51, D, 1, 0.55), n(52, D + 12, 1, 0.85), n(54, D, 1, 0.7),
-    n(55, 54, 1, 0.8), n(56, 57, 2, 0.9), n(58, D, 1, 0.6), n(59, 54, 1, 0.75),
-    n(60, 60, 1, 0.85), n(61, 57, 1, 0.75), n(62, 54, 1, 0.8), n(63, 50, 1, 0.7),
+    // Em: E B E D B | E G A B
+    n(0, 52, 2, 0.95), n(2, 59, 1, 0.6), n(4, 64, 1, 0.85), n(5, 62, 1, 0.7), n(7, 59, 1, 0.8),
+    n(8, 52, 2, 0.9), n(11, 55, 1, 0.75), n(12, 57, 1, 0.8), n(14, 59, 2, 0.7),
+    // C#m7b5: C# E G C# | B G E C#
+    n(16, 49, 2, 0.95), n(19, 52, 1, 0.6), n(20, 55, 1, 0.8), n(22, 49, 1, 0.7),
+    n(24, 59, 2, 0.85), n(26, 55, 1, 0.65), n(28, 52, 1, 0.8), n(29, 61, 1, 0.7), n(30, 61, 2, 0.75),
+    // Cmaj7: C C E G B | C G E B G
+    n(32, 48, 2, 0.95), n(35, 48, 1, 0.55), n(36, 52, 1, 0.8), n(38, 55, 1, 0.75), n(39, 59, 1, 0.8),
+    n(40, 60, 2, 0.9), n(42, 55, 1, 0.65), n(43, 52, 1, 0.7), n(44, 59, 1, 0.8), n(46, 55, 2, 0.75),
+    // D: D A C A F# | D A F# E D#
+    n(48, 50, 2, 0.95), n(50, 57, 1, 0.7), n(52, 60, 1, 0.8), n(53, 57, 1, 0.7), n(55, 54, 1, 0.8),
+    n(56, 62, 2, 0.9), n(58, 57, 1, 0.65), n(60, 54, 1, 0.8), n(61, 52, 1, 0.7), n(62, 51, 2, 0.8),
   ],
 }
