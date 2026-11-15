@@ -1,6 +1,9 @@
 //! `Engine`: the sequencer plus one track's instrument, rendering fixed blocks
 //! into output buffers the host reads from WASM memory.
+//!
+//! Signal path: instrument -> master FX chain (stereo) -> tanh soft clip.
 
+use crate::fx::FxChain;
 use crate::instrument::Instrument;
 use crate::sequencer::Sequencer;
 use crate::synth::WavetableSynth;
@@ -11,6 +14,7 @@ pub const MAX_BLOCK: usize = 128;
 pub struct Engine {
     pub sequencer: Sequencer,
     pub track: Box<dyn Instrument>,
+    pub fx: FxChain,
     pub out_left: [f32; MAX_BLOCK],
     pub out_right: [f32; MAX_BLOCK],
 }
@@ -24,13 +28,16 @@ impl Engine {
         Self {
             sequencer: Sequencer::new(sample_rate),
             track,
+            fx: FxChain::new(sample_rate),
             out_left: [0.0; MAX_BLOCK],
             out_right: [0.0; MAX_BLOCK],
         }
     }
 
     pub fn set_param(&mut self, id: u32, value: f32) {
-        self.track.set_param(id, value);
+        if !self.fx.set_param(id, value) {
+            self.track.set_param(id, value);
+        }
     }
 
     pub fn note_on(&mut self, note: u8, velocity: f32) {
@@ -43,6 +50,7 @@ impl Engine {
 
     pub fn set_transport(&mut self, playing: bool, bpm: f32) {
         self.sequencer.set_transport(playing, bpm, &mut *self.track);
+        self.fx.set_bpm(self.sequencer.bpm());
     }
 
     /// Render `frames` (clamped to MAX_BLOCK) into `out_left`/`out_right`,
@@ -67,6 +75,7 @@ impl Engine {
         if self.sequencer.samples_until_event() == Some(0) {
             self.sequencer.fire(&mut *self.track);
         }
+        self.fx.process(&mut self.out_left[..frames], &mut self.out_right[..frames]);
         for s in self.out_left[..frames].iter_mut().chain(self.out_right[..frames].iter_mut()) {
             *s = soft_clip(*s);
         }

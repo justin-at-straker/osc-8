@@ -30,5 +30,63 @@ pub const ENV1_RELEASE: u32 = 12;
 /// 0..1 linear gain.
 pub const MASTER_VOLUME: u32 = 13;
 
+
+// FX chain, in signal order: distortion -> chorus -> delay -> reverb -> ott -> eq.
+// Enums arrive as their index in patch.ts; booleans as 0/1.
+
+/// 0/1.
+pub const FX_DIST_ENABLED: u32 = 14;
+/// DIST_TYPES index: tube, soft, hard, fold, bitcrush.
+pub const FX_DIST_TYPE: u32 = 15;
+/// 0..1.
+pub const FX_DIST_DRIVE: u32 = 16;
+/// 0..1 dry/wet.
+pub const FX_DIST_MIX: u32 = 17;
+/// 0/1.
+pub const FX_CHORUS_ENABLED: u32 = 18;
+/// Hz, 0.01..10.
+pub const FX_CHORUS_RATE: u32 = 19;
+/// 0..1.
+pub const FX_CHORUS_DEPTH: u32 = 20;
+/// 0..1 dry/wet.
+pub const FX_CHORUS_MIX: u32 = 21;
+/// 0/1.
+pub const FX_DELAY_ENABLED: u32 = 22;
+/// DELAY_TIMES index: 1/4, 1/8, 1/8d, 1/16, 1/4t (tempo-synced).
+pub const FX_DELAY_TIME: u32 = 23;
+/// 0..1.
+pub const FX_DELAY_FEEDBACK: u32 = 24;
+/// 0..1 dry/wet.
+pub const FX_DELAY_MIX: u32 = 25;
+/// 0/1.
+pub const FX_DELAY_PING_PONG: u32 = 26;
+/// 0/1.
+pub const FX_REVERB_ENABLED: u32 = 27;
+/// 0..1.
+pub const FX_REVERB_SIZE: u32 = 28;
+/// 0..1.
+pub const FX_REVERB_DECAY: u32 = 29;
+/// 0..1.
+pub const FX_REVERB_DAMPING: u32 = 30;
+/// 0..1 dry/wet.
+pub const FX_REVERB_MIX: u32 = 31;
+/// 0/1.
+pub const FX_OTT_ENABLED: u32 = 32;
+/// 0..1 amount.
+pub const FX_OTT_DEPTH: u32 = 33;
+/// 0..1 attack/release scaling.
+pub const FX_OTT_TIME: u32 = 34;
+/// 0/1.
+pub const FX_EQ_ENABLED: u32 = 35;
+/// dB, -12..12 (low shelf ~200 Hz).
+pub const FX_EQ_LOW: u32 = 36;
+/// dB, -12..12 (peak ~1.5 kHz).
+pub const FX_EQ_MID: u32 = 37;
+/// dB, -12..12 (high shelf ~6 kHz).
+pub const FX_EQ_HIGH: u32 = 38;
+
+/// First FX parameter ID.
+pub const FX_FIRST: u32 = FX_DIST_ENABLED;
+
 /// Number of parameter IDs this engine understands.
-pub const PARAM_COUNT: u32 = 14;
+pub const PARAM_COUNT: u32 = 39;

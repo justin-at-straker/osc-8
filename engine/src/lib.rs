@@ -2,7 +2,9 @@
 //! AudioWorklet through the raw C ABI below (see `src/engine/protocol.ts`).
 //! The module has no imports; the host reads output from the exported `memory`.
 
+pub mod dsp;
 pub mod engine;
+pub mod fx;
 pub mod instrument;
 pub mod params;
 pub mod sequencer;

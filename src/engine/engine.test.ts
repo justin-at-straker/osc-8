@@ -140,3 +140,125 @@ describe("osc8.wasm", () => {
     expect(e.current_step()).toBe(-1)
   })
 })
+
+/** Render `blocks` x 128 frames of both channels. */
+function renderStereo(e: Exports, blocks: number): [Float32Array, Float32Array] {
+  const l = new Float32Array(blocks * 128)
+  const r = new Float32Array(blocks * 128)
+  for (let b = 0; b < blocks; b++) {
+    e.process(128)
+    l.set(new Float32Array(e.memory.buffer, e.out_left(), 128), b * 128)
+    r.set(new Float32Array(e.memory.buffer, e.out_right(), 128), b * 128)
+  }
+  return [l, r]
+}
+
+/** A short blip: instant attack, ~20 ms long. */
+function blipPatch() {
+  const p = defaultPatch()
+  p.oscA.position = 0.67
+  p.env1 = { attack: 0, decay: 0.01, sustain: 0, release: 0.01 }
+  return p
+}
+
+async function withPatch(p: ReturnType<typeof defaultPatch>): Promise<Exports> {
+  const instance = await WebAssembly.instantiate(module, {})
+  const e = instance.exports as unknown as Exports
+  e.init(SR)
+  for (const [i, v] of patchToParams(p)) e.set_param(i, v)
+  return e
+}
+
+describe("osc8.wasm FX chain (ids 14..38)", () => {
+  it("disabled FX (the default patch) is bit-identical to sending no FX params", async () => {
+    const a = await fresh()
+    const instance = await WebAssembly.instantiate(module, {})
+    const b = instance.exports as unknown as Exports
+    b.init(SR)
+    for (const [i, v] of patchToParams(defaultPatch())) if (i < 14) b.set_param(i, v)
+    a.note_on(60, 1)
+    b.note_on(60, 1)
+    const [al, ar] = renderStereo(a, 100)
+    const [bl, br] = renderStereo(b, 100)
+    expect(al).toEqual(bl)
+    expect(ar).toEqual(br)
+  })
+
+  it("every effect alone at full mix is finite and <= 1", async () => {
+    const solo: ((p: ReturnType<typeof defaultPatch>) => void)[] = [
+      (p) => (p.fx.distortion = { enabled: true, type: "fold", drive: 1, mix: 1 }),
+      (p) => (p.fx.chorus = { enabled: true, rate: 10, depth: 1, mix: 1 }),
+      (p) => (p.fx.delay = { enabled: true, time: "1/16", feedback: 1, mix: 1, pingPong: true }),
+      (p) => (p.fx.reverb = { enabled: true, size: 1, decay: 1, damping: 0, mix: 1 }),
+      (p) => (p.fx.ott = { enabled: true, depth: 1, time: 0 }),
+      (p) => (p.fx.eq = { enabled: true, low: 12, mid: 12, high: 12 }),
+    ]
+    for (const edit of solo) {
+      const p = defaultPatch()
+      edit(p)
+      const e = await withPatch(p)
+      for (const n of [48, 55, 60, 64, 67]) e.note_on(n, 1)
+      const [l, r] = renderStereo(e, 200)
+      for (const x of [l, r]) {
+        expect(x.every(Number.isFinite)).toBe(true)
+        expect(Math.max(...x.map(Math.abs))).toBeLessThanOrEqual(1)
+      }
+      expect(rms(l)).toBeGreaterThan(0.01)
+    }
+  })
+
+  it("delay 1/8 at 120 bpm echoes 12000 samples later", async () => {
+    const p = blipPatch()
+    p.fx.delay = { enabled: true, time: "1/8", feedback: 0, mix: 1, pingPong: false }
+    const e = await withPatch(p)
+    e.set_transport(0, 120) // tempo reaches the delay even while stopped
+    e.note_on(60, 1)
+    const [l] = renderStereo(e, 110) // 14080 samples
+    expect(rms(l.subarray(2000, 11900))).toBeLessThan(1e-6) // dry is fully replaced at mix 1
+    expect(rms(l.subarray(12000, 13000))).toBeGreaterThan(0.05)
+  })
+
+  it("ping-pong puts the first echo left and the second right", async () => {
+    const p = blipPatch()
+    p.fx.delay = { enabled: true, time: "1/8", feedback: 0.6, mix: 1, pingPong: true }
+    const e = await withPatch(p)
+    e.note_on(60, 1)
+    const [l, r] = renderStereo(e, 200) // 25600 samples
+    expect(rms(l.subarray(12000, 13000))).toBeGreaterThan(0.02)
+    expect(rms(r.subarray(12000, 13000))).toBeLessThan(1e-6)
+    expect(rms(r.subarray(24000, 25000))).toBeGreaterThan(0.01)
+    expect(rms(l.subarray(24000, 25000))).toBeLessThan(1e-6)
+  })
+
+  it("reverb keeps ringing in stereo after the note has stopped", async () => {
+    const p = blipPatch()
+    p.fx.reverb = { enabled: true, size: 0.7, decay: 0.7, damping: 0.3, mix: 0.5 }
+    const e = await withPatch(p)
+    e.note_on(60, 1)
+    renderStereo(e, 4)
+    e.note_off(60)
+    const [l, r] = renderStereo(e, 150)
+    const tailL = l.subarray(9600)
+    const tailR = r.subarray(9600)
+    expect(rms(tailL)).toBeGreaterThan(1e-3)
+    expect(tailL).not.toEqual(tailR)
+  })
+
+  it("distortion makes the sine brighter; eq low +12 dB makes a low note louder", async () => {
+    const sine = (edit: (p: ReturnType<typeof defaultPatch>) => void, note = 57) => async () => {
+      const p = defaultPatch()
+      p.filter.enabled = false
+      edit(p)
+      const e = await withPatch(p)
+      e.note_on(note, 1)
+      renderStereo(e, 40)
+      return renderStereo(e, 100)[0]
+    }
+    const dry = await sine(() => {})()
+    const driven = await sine((p) => (p.fx.distortion = { enabled: true, type: "hard", drive: 0.8, mix: 1 }))()
+    expect(brightness(driven)).toBeGreaterThan(brightness(dry) * 3)
+    const low = await sine(() => {}, 33)()
+    const boosted = await sine((p) => (p.fx.eq = { enabled: true, low: 12, mid: 0, high: 0 }), 33)()
+    expect(rms(boosted)).toBeGreaterThan(rms(low) * 2)
+  })
+})

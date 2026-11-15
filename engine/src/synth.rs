@@ -4,6 +4,7 @@
 //! (two cascaded Simper SVFs, crossfaded with dry for bypass) -> ADSR amp.
 //! Continuous parameters are smoothed per sample to avoid zipper noise.
 
+use crate::dsp::Smoother;
 use crate::instrument::Instrument;
 use crate::params::*;
 use crate::wavetable::{builtin_tables, Wavetable};
@@ -18,33 +19,6 @@ const MIN_RELEASE: f32 = 0.003;
 /// Envelope "time" reaches ~1% (-40 dB) of the distance to its target.
 const TIME_CONSTANTS: f32 = 4.6;
 const SILENCE: f32 = 1e-4;
-
-/// One-pole parameter smoother that snaps to its target when close.
-#[derive(Clone, Copy)]
-struct Smoother {
-    value: f32,
-    target: f32,
-    coef: f32,
-}
-
-impl Smoother {
-    fn new(value: f32) -> Self {
-        Self { value, target: value, coef: 0.0 }
-    }
-    fn set_time(&mut self, seconds: f32, sample_rate: f32) {
-        self.coef = 1.0 - (-1.0 / (seconds * sample_rate)).exp();
-    }
-    #[inline]
-    fn next(&mut self) -> f32 {
-        let d = self.target - self.value;
-        if d.abs() < 1e-4 {
-            self.value = self.target;
-        } else {
-            self.value += d * self.coef;
-        }
-        self.value
-    }
-}
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Stage {

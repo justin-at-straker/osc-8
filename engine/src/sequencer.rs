@@ -55,6 +55,11 @@ impl Sequencer {
         self.sample_rate * 60.0 / self.bpm / 4.0
     }
 
+    /// Current tempo (clamped to 20..400).
+    pub fn bpm(&self) -> f32 {
+        self.bpm as f32
+    }
+
     pub fn playing(&self) -> bool {
         self.playing
     }
