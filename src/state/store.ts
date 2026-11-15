@@ -4,6 +4,7 @@
 import { useSyncExternalStore } from "react"
 import { defaultPatch, Patch, type PatchEdit } from "@/engine/patch"
 import type { Pattern } from "@/engine/protocol"
+import { DrumKit, defaultKit, type DrumPattern } from "@/engine/drums"
 
 export type Source = "user" | "ai" | "agent" | "load"
 
@@ -11,6 +12,8 @@ export type State = {
   patch: Patch
   pattern: Pattern
   transport: { playing: boolean; bpm: number }
+  /** The 808 track: kit settings and its own 16-step pattern. */
+  drums: { kit: DrumKit; pattern: DrumPattern }
   /** Playhead from the engine; -1 when stopped. Not part of undo. */
   step: number
   audio: "off" | "starting" | "on" | "error"
@@ -19,6 +22,7 @@ export type State = {
 const initial: State = {
   patch: defaultPatch(),
   pattern: { steps: 16, notes: [] },
+  drums: { kit: defaultKit(), pattern: { steps: 16, hits: [] } },
   transport: { playing: false, bpm: 120 },
   step: -1,
   audio: "off",
@@ -28,10 +32,10 @@ let state = initial
 const listeners = new Set<() => void>()
 // Undo covers the sound and the notes together, so an AI run that writes both
 // (or a preset load) is one step back.
-type Snapshot = { patch: Patch; pattern: Pattern }
+type Snapshot = { patch: Patch; pattern: Pattern; drums: State["drums"] }
 const past: Snapshot[] = []
 const future: Snapshot[] = []
-const snapshot = (): Snapshot => ({ patch: state.patch, pattern: state.pattern })
+const snapshot = (): Snapshot => ({ patch: state.patch, pattern: state.pattern, drums: state.drums })
 
 function emit() {
   for (const l of listeners) l()
@@ -181,6 +185,44 @@ export function setPattern(pattern: Pattern, source: Source = "user") {
   if (!continuing && source !== "load") pushUndo()
   state = { ...state, pattern }
   emit()
+}
+
+/** Replace the 808 pattern, with undo; drags within one gesture share an entry. "load" has no undo entry. */
+export function setDrumPattern(pattern: DrumPattern, source: Source = "user") {
+  const now = Date.now()
+  const continuing = lastGesture.path === "drums.pattern" && lastGesture.source === source && now - lastGesture.at < GESTURE_MS
+  if (!continuing && source !== "load") pushUndo()
+  lastGesture = { path: "drums.pattern", source, at: now }
+  state = { ...state, drums: { ...state.drums, pattern } }
+  emit()
+}
+
+/** Deep-merge a partial kit edit (validated), with undo. */
+export function editKit(edit: DeepPartial<DrumKit>, source: Source = "user") {
+  const kit = DrumKit.parse(deepMerge(state.drums.kit, edit))
+  if (source !== "load") pushUndo()
+  lastGesture.at = 0
+  state = { ...state, drums: { ...state.drums, kit } }
+  emit()
+  return kit
+}
+
+/** Set one kit field by dotted path, e.g. setKitValue("voices.kick.decay", 0.7). Knob drags coalesce into one undo step. */
+export function setKitValue(path: string, value: unknown, source: Source = "user") {
+  const now = Date.now()
+  const key = `drums.kit.${path}`
+  const continuing = lastGesture.path === key && lastGesture.source === source && now - lastGesture.at < GESTURE_MS
+  const edit: Record<string, unknown> = {}
+  let node = edit
+  const parts = path.split(".")
+  for (const k of parts.slice(0, -1)) node = node[k] = {} as Record<string, unknown>
+  node[parts[parts.length - 1]] = value
+  const kit = DrumKit.parse(deepMerge(state.drums.kit, edit))
+  if (!continuing) pushUndo()
+  lastGesture = { path: key, source, at: now }
+  state = { ...state, drums: { ...state.drums, kit } }
+  emit()
+  return kit
 }
 
 export function setTransport(t: Partial<State["transport"]>) {

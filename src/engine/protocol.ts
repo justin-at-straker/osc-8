@@ -14,6 +14,9 @@ export type Note = {
 
 export type Pattern = { steps: number; notes: Note[] }
 
+export type { DrumPattern } from "./drums"
+import type { DrumPattern } from "./drums"
+
 export type ToWorklet =
   | { type: "init"; wasm: ArrayBuffer }
   | { type: "params"; params: [id: number, value: number][] }
@@ -22,6 +25,10 @@ export type ToWorklet =
   | { type: "noteOn"; note: number; velocity: number }
   | { type: "noteOff"; note: number }
   | { type: "modwheel"; value: number }
+  /** The 808 track's pattern (replaces it). Kit params travel in "params" with IDs 1000+ (drums.ts). */
+  | { type: "drumPattern"; pattern: DrumPattern }
+  /** Audition one drum voice now (grid clicks, pads). voice = index into DRUM_VOICES. */
+  | { type: "drumTrigger"; voice: number; velocity: number }
 
 export type FromWorklet =
   | { type: "ready" }
@@ -46,6 +53,10 @@ export type FromWorklet =
    current_step() -> i32           // -1 when stopped
    set_modwheel(value: f32)        // 0..1
    mod_active() -> u32             // 1 while any mod route is live
-   mod_values_ptr() -> *const f32  // 39 floats: effective (modulated) value per param ID 0..38
+   mod_values_ptr() -> *const f32  // effective (modulated) value per param ID (length: see engine report)
+   drum_pattern_clear(steps: u32)
+   drum_pattern_add(step: u32, voice: u32, velocity: f32, accent: u32)
+   drum_trigger(voice: u32, velocity: f32)
+   set_param ids 1000+ are drum kit params (drums.ts kitToParams); unknown ids are ignored.
  The module has no imports. Memory is the exported `memory`.
 */
