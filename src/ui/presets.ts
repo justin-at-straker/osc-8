@@ -288,6 +288,55 @@ export const FACTORY_PRESETS: Patch[] = [
     },
     master: { volume: 0.6 },
   }),
+  // ---- Disco / French house ----
+  preset("disco-horns", "KY Disco Horns", {
+    oscA: { table: table("basic"), position: 0.62, level: 0.75, unison: 3, detune: 0.1, blend: 0.7, spread: 0.6 },
+    oscB: { enabled: true, table: table("pwm"), position: 0.4, fine: 8, level: 0.5, unison: 2, detune: 0.06, spread: 0.5 },
+    filter: { cutoff: 900, resonance: 0.3 },
+    env1: { attack: 0.01, decay: 0.35, sustain: 0.6, release: 0.18 },
+    env2: { attack: 0.02, decay: 0.2, sustain: 0.2, release: 0.15 },
+    // The DJ-filter feel: a bar-long sweep opening and closing the stabs.
+    lfos: lfos({ shape: "triangle", syncDivision: "1/1" }),
+    mod: [route("lfo1", "filter.cutoff", 0.35), route("env2", "filter.cutoff", 0.25), route("velocity", "filter.cutoff", 0.1)],
+    fx: {
+      distortion: { enabled: true, type: "tube", drive: 0.2, mix: 0.4 },
+      chorus: { enabled: true, rate: 0.6, depth: 0.5, mix: 0.4 },
+      reverb: { enabled: true, size: 0.45, decay: 0.35, damping: 0.5, mix: 0.15 },
+      ott: { enabled: true, depth: 0.3, time: 0.4 },
+      eq: { enabled: true, low: -2, mid: 2, high: 1 },
+    },
+    master: { volume: 0.65 },
+  }),
+  preset("disco-glide-arp", "PL Disco Glide Arp", {
+    oscA: { table: table("harmonic-sweep"), position: 0.5, level: 0.9, unison: 5, detune: 0.14, blend: 0.75, spread: 1 },
+    oscB: { enabled: true, table: table("basic"), position: 0.3, octave: 1, level: 0.3 },
+    filter: { cutoff: 3400, resonance: 0.25 },
+    env1: { attack: 0.002, decay: 0.45, sustain: 0.4, release: 0.35 },
+    env2: { attack: 0, decay: 0.15, sustain: 0, release: 0.15 },
+    lfos: lfos({ sync: false, rate: 0.2, shape: "triangle" }),
+    mod: [route("env2", "filter.cutoff", 0.3), route("lfo1", "oscA.position", 0.2)],
+    fx: {
+      chorus: { enabled: true, rate: 0.45, depth: 0.6, mix: 0.45 },
+      delay: { enabled: true, time: "1/8d", feedback: 0.45, mix: 0.3, pingPong: true },
+      reverb: { enabled: true, size: 0.7, decay: 0.55, damping: 0.35, mix: 0.25 },
+    },
+    master: { volume: 0.85 },
+  }),
+  preset("wah-funk", "BS Wah Funk", {
+    oscA: { table: table("basic"), position: 0.68, octave: -1, level: 0.8 },
+    sub: { enabled: true, level: 0.4, octave: -1, shape: "sine" },
+    filter: { cutoff: 300, resonance: 0.62 },
+    env1: { attack: 0.002, decay: 0.3, sustain: 0.55, release: 0.08 },
+    // Auto-wah: every note sweeps the resonant filter up and back.
+    env2: { attack: 0.03, decay: 0.22, sustain: 0.1, release: 0.1 },
+    mod: [route("env2", "filter.cutoff", 0.5), route("velocity", "filter.cutoff", 0.15)],
+    fx: {
+      distortion: { enabled: true, type: "soft", drive: 0.3, mix: 0.45 },
+      chorus: { enabled: true, rate: 0.3, depth: 0.25, mix: 0.2 },
+      ott: { enabled: true, depth: 0.3, time: 0.4 },
+    },
+    master: { volume: 0.72 },
+  }),
   // ---- 80s ----
   preset("poly-brass", "KY 80s Poly Brass", {
     oscA: { table: table("pwm"), position: 0.45, level: 0.75, unison: 3, detune: 0.12, blend: 0.7, spread: 0.7 },
