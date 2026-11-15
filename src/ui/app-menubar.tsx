@@ -25,6 +25,7 @@ import { exportPatch, importPatch } from "@/state/patch-files"
 import { clearStartup, saveStartup } from "@/state/startup"
 import { notify } from "@/components/ui/toaster"
 import { loadPresetById, PRESETS_BY_CATEGORY, stepPreset } from "./preset-state"
+import { pickMidiFile } from "@/midi/open"
 import { togglePlay } from "./transport-actions"
 import type { EngineControls } from "./types"
 
@@ -102,6 +103,8 @@ export function AppMenubar({ engine, onOpenKeys, onError, onNotice = (title, des
         return onNotice?.("Startup default reset", "OSC-8 will open with the factory demo next time.")
       case "export-patch":
         return exportPatch()
+      case "import-midi":
+        return pickMidiFile()
       case "undo":
         return undo()
       case "redo":
@@ -135,6 +138,7 @@ export function AppMenubar({ engine, onOpenKeys, onError, onNotice = (title, des
               "-",
               { value: "import-patch", label: "Import patch…" },
               { value: "export-patch", label: "Export patch…" },
+              { value: "import-midi", label: "Import MIDI…" },
               "-",
               { value: "save-startup", label: "Save as startup default" },
               { value: "reset-startup", label: "Reset startup default" },

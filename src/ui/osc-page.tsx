@@ -8,6 +8,8 @@ import { FrontPanel, type FrontPage } from "./front-panel"
 import { DrumGrid } from "./drum-grid"
 import type { Track } from "./drum-model"
 import { TrackSwitch } from "./track-switch"
+import { MidiImportDialog } from "./midi-import-dialog"
+import { useMidiDrop } from "./use-midi-drop"
 import { PresetBrowser } from "./preset-browser"
 import { ModSourceStrip } from "./mod-ui"
 import { Transport } from "./transport"
@@ -18,6 +20,7 @@ import "./mod.css"
 import "./synth.css"
 import "./drums.css"
 import "./paging.css"
+import "./midi.css"
 
 /**
  * The M1 instrument: one device with the transport and the AI slot across the
@@ -55,9 +58,10 @@ export function OscPage({
     else if (page === "drum") setPage("synth")
   }
   const trackSwitch = <TrackSwitch track={track} onTrackChange={chooseTrack} />
+  const dropping = useMidiDrop()
 
   return (
-    <main data-osc-page>
+    <main data-osc-page data-dropping={dropping || undefined}>
       <Device model="OSC-8" name="Wavetable synth" plate="none">
         <div data-osc-header>
           <DevicePlate model="OSC-8" name="Wavetable synth" on={audio === "on" && playing} />
@@ -81,6 +85,7 @@ export function OscPage({
         )}
       </Device>
       {audioGate && <AudioGate engine={engine} />}
+      <MidiImportDialog />
     </main>
   )
 }

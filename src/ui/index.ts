@@ -33,3 +33,5 @@ export { setHit, toggleHit, toggleAccent, clearDrums, seedDrums, selectVoice, us
 export { BAR_STEPS, LENGTH_BARS, barsOf, resize, setPatternBars, setDrumBars, showBar, setFollow, usePaging, type Paging } from "./pattern-paging"
 export { LengthSelect, BarSelect, Overview } from "./pattern-nav"
 export { usePatternPage } from "./use-pattern-page"
+export { MidiImportDialog } from "./midi-import-dialog"
+export { useMidiDrop } from "./use-midi-drop"

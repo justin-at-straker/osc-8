@@ -1,0 +1,91 @@
+/* Import MIDI: the dialog's track table and options, and the drop highlight. */
+
+[data-osc-midi-dialog]:not(#_):not(#_):not(#_) {
+  width: min(620px, calc(100vw - 32px));
+  max-width: none;
+
+  /* Cancel / Import at the foot of the dialog, after the choices they act on. */
+  & [data-kit="actions"]:not(#_):not(#_):not(#_) {
+    grid-row: auto;
+    order: 99;
+  }
+
+  /* The kit's checkbox is a full-size key; a size down to sit in a table row. */
+  & [data-kit="checkbox"] {
+    zoom: 0.5;
+  }
+}
+
+[data-osc-midi-tracks] {
+  display: grid;
+  max-height: min(40vh, 260px);
+  overflow-y: auto;
+  border-radius: 8px;
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.12), 0 1px 0 #fff;
+  padding: 4px 8px;
+}
+
+[data-osc-midi-head],
+[data-osc-midi-track] {
+  display: grid;
+  grid-template-columns: 44px 44px minmax(0, 1fr) 96px 56px;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  font: 400 12px/1.2 var(--sans);
+}
+
+[data-osc-midi-head] {
+  min-height: 22px;
+  font: var(--legend);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--legend-ink);
+}
+
+[data-osc-midi-track] + [data-osc-midi-track] {
+  border-top: 1px solid rgb(0 0 0 / 0.06);
+}
+
+[data-osc-midi-name] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+[data-osc-midi-empty] {
+  margin: 8px 0;
+  font-size: 12px;
+}
+
+[data-osc-midi-options] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+
+  & [data-osc-stepper] [data-kit="field"] {
+    grid-auto-flow: column;
+    align-items: center;
+    gap: 8px;
+  }
+}
+
+[data-osc-midi-tempo] {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: 400 12px var(--sans);
+  cursor: pointer;
+}
+
+[data-osc-midi-summary] {
+  min-height: 34px;
+}
+
+/* A file dragged over the page: the instrument lights its edge. */
+[data-osc-page][data-dropping] [data-device] {
+  outline: 3px dashed var(--key-color);
+  outline-offset: 6px;
+}
