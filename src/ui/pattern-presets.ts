@@ -6,26 +6,27 @@ const n = (step: number, note: number, length = 1, velocity = 0.75): Note => ({ 
 export const DEMO_BPM = 122
 
 /**
- * An original 4-bar disco-funk bassline for the default BS Funk Machine
- * preset, over Em | C#m7b5 | Cmaj7 | D. Each bar lands on the root, climbs
- * through chord tones with syncopated 16ths and ghost notes, and the D bar
- * walks D# into the E at the top of the loop. Written in the roll's range;
- * the preset's octave -1 puts it in the bass register.
+ * The default 4-bar disco-funk bassline for the BS Funk Machine preset, over
+ * Em | C#m7b5 | Cmaj7 | D11, transcribed from the tab. Each chord's root is
+ * pushed: it lands on the last 8th of the bar before and ties over. Written
+ * two octaves up in the roll's range (E3 here is the bass's E1); the preset's
+ * octave -1 and sub drop it back into the bass register.
  */
 export const DEMO_PATTERN: Pattern = {
   steps: 64,
   notes: [
-    // Em: E B E D B | E G A B
-    n(0, 52, 2, 0.95), n(2, 59, 1, 0.6), n(4, 64, 1, 0.85), n(5, 62, 1, 0.7), n(7, 59, 1, 0.8),
-    n(8, 52, 2, 0.9), n(11, 55, 1, 0.75), n(12, 57, 1, 0.8), n(14, 59, 2, 0.7),
-    // C#m7b5: C# E G C# | B G E C#
-    n(16, 49, 2, 0.95), n(19, 52, 1, 0.6), n(20, 55, 1, 0.8), n(22, 49, 1, 0.7),
-    n(24, 59, 2, 0.85), n(26, 55, 1, 0.65), n(28, 52, 1, 0.8), n(29, 61, 1, 0.7), n(30, 61, 2, 0.75),
-    // Cmaj7: C C E G B | C G E B G
-    n(32, 48, 2, 0.95), n(35, 48, 1, 0.55), n(36, 52, 1, 0.8), n(38, 55, 1, 0.75), n(39, 59, 1, 0.8),
-    n(40, 60, 2, 0.9), n(42, 55, 1, 0.65), n(43, 52, 1, 0.7), n(44, 59, 1, 0.8), n(46, 55, 2, 0.75),
-    // D: D A C A F# | D A F# E D#
-    n(48, 50, 2, 0.95), n(50, 57, 1, 0.7), n(52, 60, 1, 0.8), n(53, 57, 1, 0.7), n(55, 54, 1, 0.8),
-    n(56, 62, 2, 0.9), n(58, 57, 1, 0.65), n(60, 54, 1, 0.8), n(61, 52, 1, 0.7), n(62, 51, 2, 0.8),
+    // Em: E1 E2 | E2 G2 | E1 E1 E2 E2 | A2, pushed C#1
+    n(0, 52, 2, 0.95), n(2, 64, 1, 0.7), n(4, 64, 2, 0.85), n(6, 67, 1, 0.75),
+    n(8, 52, 1, 0.9), n(9, 52, 1, 0.6), n(10, 64, 1, 0.8), n(11, 64, 1, 0.65),
+    n(13, 69, 1, 0.75), n(14, 49, 4, 0.95),
+    // C#m7b5: C#2 | G1 | A1 D1 | C#1, pushed C1 - chromatic walk down to C
+    n(18, 61, 2, 0.8), n(22, 55, 2, 0.8), n(25, 57, 1, 0.75), n(26, 50, 1, 0.8),
+    n(28, 49, 1, 0.8), n(30, 48, 4, 0.95),
+    // Cmaj7: C2 C3 | G2 | G1 E2 | pushed D1
+    n(34, 60, 1, 0.75), n(35, 72, 1, 0.8), n(37, 67, 2, 0.8),
+    n(40, 55, 2, 0.85), n(43, 64, 1, 0.75), n(46, 50, 4, 0.95),
+    // D11: A2 | D2 B2 A1 | D#2 D#1 | pushed E1 back to the top
+    n(50, 69, 1, 0.75), n(52, 62, 2, 0.85), n(54, 71, 1, 0.8), n(55, 57, 1, 0.7),
+    n(57, 63, 1, 0.75), n(59, 51, 1, 0.8), n(62, 52, 2, 0.95),
   ],
 }
