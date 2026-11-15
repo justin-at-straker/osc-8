@@ -1,16 +1,17 @@
 import * as React from "react"
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@ui-sdk/react/tabs"
 import { useStore } from "@/state/store"
+import { DrumPanel } from "./drum-panel"
 import { FxPanel } from "./fx-panel"
 import { ModPanel } from "./mod-panel"
 import { ModDragGhost } from "./mod-ui"
 import { SynthPanel } from "./synth-panel"
 import { useUndoKeys } from "./use-undo-keys"
 
-export type FrontPage = "synth" | "fx" | "mod"
+export type FrontPage = "synth" | "fx" | "mod" | "drum"
 
 /**
- * The front panel: SYNTH, FX and MOD pages behind the kit's station-key tabs,
+ * The front panel: SYNTH, FX, MOD and DRUM pages behind the kit's station-key tabs,
  * stood on end down the left so the pages don't cost the roll any height.
  * Both pages stay mounted, so the UI SDK agent can reach any knob from either.
  * The FX key carries an LED, lit while any effect is on; the MOD key's lights while any route exists.
@@ -45,6 +46,9 @@ export function FrontPanel({ page, onPageChange }: { page?: FrontPage; onPageCha
           Mod
           <i data-osc-tab-led data-on={routes > 0 || undefined} data-family="lfo" aria-hidden />
         </TabsTab>
+        <TabsTab value="drum" data-kit="tab">
+          Drum
+        </TabsTab>
       </TabsList>
       <TabsPanel value="synth" data-kit="tab-panel" keepMounted>
         <SynthPanel />
@@ -54,6 +58,9 @@ export function FrontPanel({ page, onPageChange }: { page?: FrontPage; onPageCha
       </TabsPanel>
       <TabsPanel value="mod" data-kit="tab-panel" keepMounted>
         <ModPanel />
+      </TabsPanel>
+      <TabsPanel value="drum" data-kit="tab-panel" keepMounted>
+        <DrumPanel />
       </TabsPanel>
       <ModDragGhost />
     </Tabs>

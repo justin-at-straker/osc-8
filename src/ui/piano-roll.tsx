@@ -1,6 +1,6 @@
 import * as React from "react"
 import { spatialMove } from "@ui-sdk/core"
-import { getState, setPattern, useStore } from "@/state/store"
+import { endGesture, getState, setPattern, useStore } from "@/state/store"
 import { Button } from "@/components/ui/button"
 import { Display } from "@/components/ui/display"
 import { Icon } from "@/components/ui/icon"
@@ -18,7 +18,17 @@ import { cellKey, coverage, noteName, removeNoteAt, ROLL_BOTTOM, ROLL_TOP, setNo
 const ROWS = Array.from({ length: ROLL_TOP - ROLL_BOTTOM + 1 }, (_, i) => ROLL_TOP - i)
 
 /** The pattern editor: C3..C5 by 16 steps, with a playhead column from the engine's step. */
-export function PianoRoll({ seed = true, barSlot }: { seed?: boolean; /** Rendered at the start of the pattern bar (the mod source strip). */ barSlot?: React.ReactNode }) {
+export function PianoRoll({
+  seed = true,
+  barSlot,
+  trackSlot,
+}: {
+  seed?: boolean
+  /** Rendered at the start of the pattern bar (the mod source strip). */
+  barSlot?: React.ReactNode
+  /** Rendered before the pattern legend (the SYNTH | 808 track keys). */
+  trackSlot?: React.ReactNode
+}) {
   const pattern = useStore((s) => s.pattern)
   const step = useStore((s) => s.step)
   const playing = useStore((s) => s.transport.playing)
@@ -61,6 +71,7 @@ export function PianoRoll({ seed = true, barSlot }: { seed?: boolean; /** Render
   const onCellPointerUp = () => {
     if (drag.current?.moved) swallowClick.current = true
     drag.current = null
+    endGesture()
   }
   const onCellClick = (note: number, column: number) => {
     if (swallowClick.current) {
@@ -110,6 +121,7 @@ export function PianoRoll({ seed = true, barSlot }: { seed?: boolean; /** Render
     <div data-osc-roll>
       <div data-osc-roll-bar>
         {barSlot}
+        {trackSlot}
         <h2>Pattern</h2>
         <StepperControl label="Note length" legend="Len" value={length} min={1} max={steps} onValueChange={setLength} />
         <Button aria-label="Clear pattern" onClick={() => setPattern({ ...pattern, notes: [] })}>

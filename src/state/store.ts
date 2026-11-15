@@ -138,6 +138,11 @@ export function setPatchValue(path: string, value: unknown, source: Source = "us
   return next
 }
 
+/** End the current drag gesture, so the next edit starts a new undo step even within GESTURE_MS. Call on pointer release. */
+export function endGesture() {
+  lastGesture.at = 0
+}
+
 /** Forget undo/redo history, e.g. after the startup preset and pattern are loaded. */
 export function resetHistory() {
   past.length = 0

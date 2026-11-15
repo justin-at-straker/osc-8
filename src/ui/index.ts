@@ -26,3 +26,7 @@ export {
 } from "./mod-model"
 export { setLiveModValues, useLiveModValue } from "./mod-live"
 export { CompactSelect } from "./compact-select"
+export { DrumGrid } from "./drum-grid"
+export { DrumPanel } from "./drum-panel"
+export { TrackSwitch } from "./track-switch"
+export { setHit, toggleHit, toggleAccent, clearDrums, seedDrums, selectVoice, useSelectedVoice, HIT_VELOCITY, type Track } from "./drum-model"
