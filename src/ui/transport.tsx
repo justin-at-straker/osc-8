@@ -7,6 +7,7 @@ import { ParamKnob } from "./controls"
 import { Knob } from "./knob"
 import { isTextEntry } from "./keys"
 import { MAX_BPM, MIN_BPM, togglePlay } from "./transport-actions"
+import { BAR_STEPS, barsOf } from "./pattern-paging"
 import type { EngineControls } from "./types"
 
 /** Space toggles play anywhere except in text entry. */
@@ -34,10 +35,17 @@ export function Transport({ engine, octave }: { engine?: EngineControls; octave?
   const playing = useStore((s) => s.transport.playing)
   const bpm = useStore((s) => s.transport.bpm)
   const step = useStore((s) => s.step)
-  const steps = useStore((s) => s.pattern.steps)
+  // The longer of the two tracks sets the song position's range.
+  const steps = useStore((s) => Math.max(s.pattern.steps, s.drums.pattern.steps))
   useSpaceToPlay(engine)
 
-  const stepText = step < 0 ? "--" : String(step + 1).padStart(2, "0")
+  // One bar: "05/16". Longer: bar.step, "2.05/4" (bars).
+  const multiBar = steps > BAR_STEPS
+  const at = step < 0 ? -1 : step % steps
+  const bar = Math.floor(at / BAR_STEPS) + 1
+  const inBar = (at % BAR_STEPS) + 1
+  const stepText = at < 0 ? (multiBar ? "-.--" : "--") : multiBar ? `${bar}.${String(inBar).padStart(2, "0")}` : String(at + 1).padStart(2, "0")
+  const position = at < 0 ? "stopped" : multiBar ? `bar ${bar} step ${inBar}` : String(at + 1)
   return (
     <div data-osc-transport>
       <Button
@@ -49,15 +57,15 @@ export function Transport({ engine, octave }: { engine?: EngineControls; octave?
       >
         <Icon name={playing ? "stop" : "play"} />
       </Button>
-      <Lcd tag="SEQ" size="md" data-osc-lcd role="status" aria-label={`Tempo ${bpm} BPM, step ${step < 0 ? "stopped" : step + 1}`}>
+      <Lcd tag="SEQ" size="md" data-osc-lcd role="status" aria-label={`Tempo ${bpm} BPM, step ${position}`}>
         <div data-osc-lcd-row>
           <span data-osc-lcd-field>
             <LcdDigits value={String(Math.round(bpm)).padStart(3, " ")} ghost="888" />
             <small>BPM</small>
           </span>
           <span data-osc-lcd-field>
-            <LcdDigits value={stepText} ghost="88" />
-            <small>/{steps}</small>
+            <LcdDigits value={stepText} ghost={multiBar ? "8.88" : "88"} />
+            <small>/{multiBar ? barsOf(steps) : steps}</small>
           </span>
           {octave !== undefined && (
             <span data-osc-lcd-field>

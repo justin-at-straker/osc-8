@@ -147,6 +147,16 @@ describe("osc8.wasm", () => {
     e.set_transport(0, 120)
     expect(e.current_step()).toBe(-1)
   })
+
+  it("reports the absolute tick, not the synth-wrapped step, so tracks of different lengths each wrap it", async () => {
+    const e = await fresh()
+    e.pattern_clear(4) // a short synth pattern
+    e.drum_pattern_clear(16)
+    e.set_transport(1, 120) // 6000 samples per step at 48 kHz
+    render(e, 6 * 47) // ~6 steps of 128-frame blocks
+    expect(e.current_step()).toBeGreaterThanOrEqual(5) // past the 4-step synth loop
+    e.set_transport(0, 120)
+  })
 })
 
 /** Render `blocks` x 128 frames of both channels. */

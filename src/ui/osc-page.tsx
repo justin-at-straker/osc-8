@@ -17,6 +17,7 @@ import "./osc.css"
 import "./mod.css"
 import "./synth.css"
 import "./drums.css"
+import "./paging.css"
 
 /**
  * The M1 instrument: one device with the transport and the AI slot across the

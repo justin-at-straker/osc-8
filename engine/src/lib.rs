@@ -110,7 +110,9 @@ pub extern "C" fn out_right() -> *const f32 {
 
 #[no_mangle]
 pub extern "C" fn current_step() -> i32 {
-    engine().map(|e| e.sequencer.current_step()).unwrap_or(-1)
+    // The absolute 16th-note tick since play started (wrapped only at i32 range), so the
+    // synth and drum views can each wrap it to their own pattern length.
+    engine().map(|e| (e.sequencer.current_tick() % i32::MAX as i64) as i32).unwrap_or(-1)
 }
 
 /// Mod wheel, 0..1 (a modulation source; no MIDI CC input yet).

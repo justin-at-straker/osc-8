@@ -7,6 +7,9 @@ import { Icon } from "@/components/ui/icon"
 import { StepperControl } from "./controls"
 import { DEMO_PATTERN } from "./pattern-presets"
 import { cellKey, coverage, noteName, removeNoteAt, ROLL_BOTTOM, ROLL_TOP, setNoteLength, toggleCell } from "./roll-model"
+import { BarSelect, LengthSelect, Overview } from "./pattern-nav"
+import { usePatternPage } from "./use-pattern-page"
+import { BAR_STEPS, setPatternBars, showBar } from "./pattern-paging"
 
 // The piano roll, adapted from the SPEC-01 midi-editor block and bound to the
 // store's pattern. Rows run from the top note down; a note covers `length`
@@ -30,7 +33,6 @@ export function PianoRoll({
   trackSlot?: React.ReactNode
 }) {
   const pattern = useStore((s) => s.pattern)
-  const step = useStore((s) => s.step)
   const playing = useStore((s) => s.transport.playing)
   const [length, setLength] = React.useState(1)
 
@@ -41,6 +43,13 @@ export function PianoRoll({
 
   const owner = React.useMemo(() => coverage(pattern), [pattern])
   const steps = pattern.steps
+  // One bar shows at a time; `first` is its first absolute step.
+  const { page, bars, first, follow, here, noteEdit } = usePatternPage("synth", steps)
+  const columns = Array.from({ length: Math.min(BAR_STEPS, steps - first) }, (_, i) => first + i)
+  const marks = React.useMemo(
+    () => pattern.notes.map((n): [number, number, number] => [n.step, n.length, (ROLL_TOP - n.note) / (ROLL_TOP - ROLL_BOTTOM)]),
+    [pattern]
+  )
 
   // Drag to draw a note's length. The press anchors on the note under it (or
   // the cell, if empty); moving right along the row sets the length.
@@ -49,6 +58,7 @@ export function PianoRoll({
 
   const onCellPointerDown = (event: React.PointerEvent<HTMLButtonElement>, note: number, column: number) => {
     if (event.button !== 0) return
+    noteEdit(column)
     swallowClick.current = false
     const at = owner.get(cellKey(note, column))
     const anchor = at !== undefined ? pattern.notes[at].step : column
@@ -78,12 +88,21 @@ export function PianoRoll({
       swallowClick.current = false
       return
     }
+    noteEdit(column)
     toggleCell(note, column, length)
   }
 
   // The roll is one tab stop; arrows move by UI SDK's spatialMove, as in the midi-editor block.
   const [active, setActive] = React.useState(cellKey(60, 0))
   const move = React.useMemo(() => spatialMove(), [])
+  // Arrowing off the edge of the bar pages to the next one; the cell is focused once it renders.
+  const pendingFocus = React.useRef<string | null>(null)
+  React.useEffect(() => {
+    const key = pendingFocus.current
+    if (!key) return
+    pendingFocus.current = null
+    document.querySelector<HTMLElement>(`[data-cell="${key}"]`)?.focus()
+  }, [page])
   const onRollKey = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement
     if (!target.matches('[role="gridcell"]') || !target.dataset.cell) return
@@ -100,6 +119,18 @@ export function PianoRoll({
     if ((event.key === "Delete" || event.key === "Backspace") && at !== undefined) {
       event.preventDefault()
       removeNoteAt(at)
+      return
+    }
+    const edge = event.key === "ArrowRight" ? first + BAR_STEPS - 1 : event.key === "ArrowLeft" ? first : -1
+    if (column === edge && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      const to = event.key === "ArrowRight" ? page + 1 : page - 1
+      if (to >= 0 && to < bars) {
+        event.preventDefault()
+        const key = cellKey(note, column + (event.key === "ArrowRight" ? 1 : -1))
+        setActive(key)
+        pendingFocus.current = key
+        showBar("synth", to)
+      }
       return
     }
     const items = [...event.currentTarget.querySelectorAll<HTMLElement>('[role="gridcell"]')].map((el) => ({
@@ -123,6 +154,8 @@ export function PianoRoll({
         {barSlot}
         {trackSlot}
         <h2>Pattern</h2>
+        <LengthSelect label="Pattern length" steps={steps} onBars={setPatternBars} />
+        <BarSelect track="synth" label="Pattern bar" page={page} bars={bars} follow={follow} />
         <StepperControl label="Note length" legend="Len" value={length} min={1} max={steps} onValueChange={setLength} />
         <Button aria-label="Clear pattern" onClick={() => setPattern({ ...pattern, notes: [] })}>
           <Icon name="trash" />
@@ -137,8 +170,10 @@ export function PianoRoll({
           aria-multiselectable="true"
           aria-label="Piano roll"
           onKeyDown={onRollKey}
-          style={{ gridTemplateRows: `repeat(${ROWS.length}, 1fr) 9px` }}
+          data-bars={bars}
+          style={{ gridTemplateRows: `${bars > 1 ? "16px " : ""}repeat(${ROWS.length}, 1fr) 9px` }}
         >
+          <Overview track="synth" label="Pattern overview" steps={steps} page={page} here={here} marks={marks} />
           {ROWS.map((note) => {
             const name = noteName(note)
             const sharp = name.includes("#")
@@ -148,7 +183,8 @@ export function PianoRoll({
                 <span role="rowheader" data-roll-key aria-label={name}>
                   {octaveC ? name : ""}
                 </span>
-                {Array.from({ length: steps }, (_, c) => {
+                {columns.map((c) => {
+                  const i = c - first
                   const at = owner.get(cellKey(note, c))
                   const n = at !== undefined ? pattern.notes[at] : undefined
                   const key = cellKey(note, c)
@@ -160,13 +196,13 @@ export function PianoRoll({
                       data-cell={key}
                       tabIndex={active === key ? 0 : -1}
                       onFocus={() => setActive(key)}
-                      aria-label={`${name}, step ${c + 1}${n ? (n.step === c ? `, ${n.length} step note` : ", held") : ""}`}
+                      aria-label={`${name}, ${bars > 1 ? `bar ${page + 1}, ` : ""}step ${i + 1}${n ? (n.step === c ? `, ${n.length} step note` : ", held") : ""}`}
                       aria-selected={n !== undefined}
                       data-start={(n && n.step === c) || undefined}
                       data-held={(n && n.step !== c) || undefined}
                       data-tail={(n && n.step + n.length - 1 === c) || undefined}
-                      data-beat={c % 4 === 0 || undefined}
-                      data-now={c === step || undefined}
+                      data-beat={i % 4 === 0 || undefined}
+                      data-now={c === here || undefined}
                       onPointerDown={(event) => onCellPointerDown(event, note, c)}
                       onPointerMove={onCellPointerMove}
                       onPointerUp={onCellPointerUp}
@@ -180,12 +216,12 @@ export function PianoRoll({
           })}
           <div data-roll-steps aria-hidden>
             <span />
-            {Array.from({ length: steps }, (_, c) => (
+            {columns.map((c) => (
               <i
                 key={c}
-                data-beat={c % 4 === 0 || undefined}
+                data-beat={(c - first) % 4 === 0 || undefined}
                 data-filled={pattern.notes.some((n) => n.step === c) || undefined}
-                data-now={(playing && c === step) || undefined}
+                data-now={(playing && c === here) || undefined}
               />
             ))}
           </div>

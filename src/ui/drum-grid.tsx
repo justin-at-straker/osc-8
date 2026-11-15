@@ -7,6 +7,9 @@ import { Display } from "@/components/ui/display"
 import { Icon } from "@/components/ui/icon"
 import { clearDrums, hasHit, HIT_VELOCITY, seedDrums, selectVoice, setHit, toggleAccent, toggleHit, useSelectedVoice } from "./drum-model"
 import type { EngineControls } from "./types"
+import { BarSelect, LengthSelect, Overview } from "./pattern-nav"
+import { usePatternPage } from "./use-pattern-page"
+import { BAR_STEPS, setDrumBars, showBar } from "./pattern-paging"
 
 // The 808 step grid, in the piano roll's black glass: a row per voice, 16
 // steps. Click toggles a hit; press and drag paints (or erases, if the press
@@ -31,7 +34,6 @@ export function DrumGrid({
 }) {
   const pattern = useStore((s) => s.drums.pattern)
   const voices = useStore((s) => s.drums.kit.voices)
-  const step = useStore((s) => s.step)
   const playing = useStore((s) => s.transport.playing)
   const selected = useSelectedVoice()
 
@@ -40,6 +42,13 @@ export function DrumGrid({
   }, [seed])
 
   const hits = React.useMemo(() => new Map(pattern.hits.map((h) => [cellKey(h.voice, h.step), h])), [pattern])
+  // One bar shows at a time; `first` is its first absolute step.
+  const { page, bars, first, follow, here, noteEdit } = usePatternPage("808", pattern.steps)
+  const columns = Array.from({ length: Math.min(BAR_STEPS, pattern.steps - first) }, (_, i) => first + i)
+  const marks = React.useMemo(
+    () => pattern.hits.map((h): [number, number, number] => [h.step, 1, DRUM_VOICES.indexOf(h.voice) / (DRUM_VOICES.length - 1)]),
+    [pattern]
+  )
 
   // Paint: the press decides add or erase; moving along the row applies it to each cell passed.
   const paint = React.useRef<{ voice: DrumVoice; on: boolean; id: number } | null>(null)
@@ -47,6 +56,7 @@ export function DrumGrid({
   const onPointerDown = (event: React.PointerEvent<HTMLButtonElement>, voice: DrumVoice, column: number) => {
     if (event.button !== 0) return
     pointerHandled.current = true
+    noteEdit(column)
     if (event.shiftKey) {
       toggleAccent(voice, column)
       return
@@ -77,11 +87,20 @@ export function DrumGrid({
       pointerHandled.current = false
       return
     }
+    noteEdit(column)
     toggleHit(voice, column)
   }
 
   const [active, setActive] = React.useState(cellKey("kick", 0))
   const move = React.useMemo(() => spatialMove(), [])
+  // Arrowing off the edge of the bar pages to the next one; the cell is focused once it renders.
+  const pendingFocus = React.useRef<string | null>(null)
+  React.useEffect(() => {
+    const key = pendingFocus.current
+    if (!key) return
+    pendingFocus.current = null
+    document.querySelector<HTMLElement>(`[data-drum-cell="${key}"]`)?.focus()
+  }, [page])
   const onKey = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement
     if (!target.dataset.drumCell) return
@@ -89,6 +108,20 @@ export function DrumGrid({
       event.preventDefault()
       const [voice, column] = target.dataset.drumCell.split(":")
       toggleAccent(voice as DrumVoice, Number(column))
+      return
+    }
+    const [voice, col] = target.dataset.drumCell.split(":")
+    const column = Number(col)
+    const edge = event.key === "ArrowRight" ? first + BAR_STEPS - 1 : event.key === "ArrowLeft" ? first : -1
+    if (column === edge && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      const to = event.key === "ArrowRight" ? page + 1 : page - 1
+      if (to >= 0 && to < bars) {
+        event.preventDefault()
+        const key = `${voice}:${column + (event.key === "ArrowRight" ? 1 : -1)}`
+        setActive(key)
+        pendingFocus.current = key
+        showBar("808", to)
+      }
       return
     }
     const items = [...event.currentTarget.querySelectorAll<HTMLElement>("[data-drum-cell]")].map((el) => ({ key: el.dataset.drumCell!, props: {}, el }))
@@ -108,6 +141,8 @@ export function DrumGrid({
         {barSlot}
         {trackSlot}
         <h2>808 Pattern</h2>
+        <LengthSelect label="Drum pattern length" steps={pattern.steps} onBars={setDrumBars} />
+        <BarSelect track="808" label="Drum pattern bar" page={page} bars={bars} follow={follow} />
         <Button aria-label="Clear drum pattern" onClick={clearDrums}>
           <Icon name="trash" />
         </Button>
@@ -121,8 +156,10 @@ export function DrumGrid({
           aria-multiselectable="true"
           aria-label="808 step grid"
           onKeyDown={onKey}
-          style={{ gridTemplateRows: `repeat(${DRUM_VOICES.length}, 1fr) 9px` }}
+          data-bars={bars}
+          style={{ gridTemplateRows: `${bars > 1 ? "16px " : ""}repeat(${DRUM_VOICES.length}, 1fr) 9px` }}
         >
+          <Overview track="808" label="Drum pattern overview" steps={pattern.steps} page={page} here={here} marks={marks} />
           {DRUM_VOICES.map((voice, index) => {
             const name = DRUM_LABELS[voice]
             return (
@@ -141,7 +178,8 @@ export function DrumGrid({
                 >
                   {DRUM_SHORT[voice]}
                 </button>
-                {Array.from({ length: pattern.steps }, (_, c) => {
+                {columns.map((c) => {
+                  const i = c - first
                   const hit = hits.get(cellKey(voice, c))
                   const key = cellKey(voice, c)
                   return (
@@ -152,11 +190,11 @@ export function DrumGrid({
                       data-drum-cell={key}
                       tabIndex={active === key ? 0 : -1}
                       onFocus={() => setActive(key)}
-                      aria-label={`${name}, step ${c + 1}${hit?.accent ? ", accent" : ""}`}
+                      aria-label={`${name}, ${bars > 1 ? `bar ${page + 1}, ` : ""}step ${i + 1}${hit?.accent ? ", accent" : ""}`}
                       aria-selected={!!hit}
                       data-accent={hit?.accent || undefined}
-                      data-beat={c % 4 === 0 || undefined}
-                      data-now={c === step || undefined}
+                      data-beat={i % 4 === 0 || undefined}
+                      data-now={c === here || undefined}
                       onPointerDown={(event) => onPointerDown(event, voice, c)}
                       onPointerMove={onPointerMove}
                       onPointerUp={endPaint}
@@ -174,8 +212,8 @@ export function DrumGrid({
           })}
           <div data-roll-steps aria-hidden>
             <span />
-            {Array.from({ length: pattern.steps }, (_, c) => (
-              <i key={c} data-beat={c % 4 === 0 || undefined} data-filled={pattern.hits.some((h) => h.step === c) || undefined} data-now={(playing && c === step) || undefined} />
+            {columns.map((c) => (
+              <i key={c} data-beat={(c - first) % 4 === 0 || undefined} data-filled={pattern.hits.some((h) => h.step === c) || undefined} data-now={(playing && c === here) || undefined} />
             ))}
           </div>
         </div>

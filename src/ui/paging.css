@@ -1,0 +1,150 @@
+/* Multi-bar patterns: length and bar keys in the pattern bar, the overview strip on the screen. */
+
+[data-osc-keyrow] {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+[data-osc-keyrow-legend] {
+  font: var(--legend);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--legend-ink);
+}
+
+[data-osc-keys] {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.06);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.12), 0 1px 0 #fff;
+}
+
+[data-osc-key] {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  font: 600 9px/1 var(--mono, monospace);
+  color: var(--dim);
+  background: linear-gradient(180deg, #fbfbf9, #ececE8);
+  box-shadow: 0 1px 0 #cfcfca;
+  cursor: pointer;
+
+  &[aria-checked="true"],
+  &[data-checked],
+  &[aria-pressed="true"] {
+    color: #fff;
+    background: var(--key-color);
+    box-shadow: inset 0 1px 2px color-mix(in oklab, var(--key-color), #000 35%);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--key-color);
+    outline-offset: 1px;
+  }
+}
+
+[data-osc-bar-select] {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Follow: a small latching key with a light. */
+[data-osc-follow] {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 5px;
+  font: 600 7.5px/1 var(--sans);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dim);
+  background: linear-gradient(180deg, #fbfbf9, #ececE8);
+  box-shadow: 0 2px 0 #d3d3ce;
+  cursor: pointer;
+
+  & i {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #c9c9c5;
+  }
+
+  &[aria-pressed="true"] {
+    color: var(--ink);
+    translate: 0 1px;
+    box-shadow: 0 1px 0 #d3d3ce;
+
+    & i {
+      background: var(--key-color);
+      box-shadow: 0 0 5px var(--key-color);
+    }
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--key-color);
+    outline-offset: 2px;
+  }
+}
+
+/* The roll's bar is fuller now; its pieces sit a little closer. */
+[data-osc-roll-bar] {
+  gap: 10px;
+
+  & > h2 {
+    white-space: nowrap;
+  }
+}
+
+/* Overview: every bar in one strip along the top of the screen. */
+[data-osc-overview] {
+  display: grid;
+  gap: 2px;
+  padding-bottom: 3px;
+}
+
+[data-osc-overview-bar] {
+  position: relative;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: rgb(255 255 255 / 0.05);
+  cursor: pointer;
+
+  & svg {
+    position: absolute;
+    inset: 1px 2px;
+    width: calc(100% - 4px);
+    height: calc(100% - 2px);
+  }
+
+  & rect {
+    fill: color-mix(in oklab, var(--lcd-key) 75%, transparent);
+  }
+
+  & [data-osc-overview-head] {
+    stroke: #fff;
+    stroke-width: 0.35;
+  }
+
+  &[data-shown] {
+    background: rgb(255 255 255 / 0.12);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--lcd-key) 70%, transparent);
+  }
+
+  &:hover {
+    background: rgb(255 255 255 / 0.16);
+  }
+
+  &:focus-visible {
+    outline: 1px solid #fff;
+  }
+}

@@ -72,6 +72,13 @@ impl Sequencer {
         if self.playing { self.current } else { -1 }
     }
 
+    /// The 16th-note tick that most recently started, counted from transport start
+    /// (not wrapped), or -1 when stopped or before the first step. Tracks of different
+    /// lengths each wrap it to their own pattern length for display.
+    pub fn current_tick(&self) -> i64 {
+        if self.playing && self.ticks > 0 { (self.ticks - 1) as i64 } else { -1 }
+    }
+
     pub fn pattern_clear(&mut self, steps: u32) {
         self.notes.clear();
         self.steps = steps.clamp(1, 1024);
