@@ -1,0 +1,12 @@
+# Never upload secrets or personal/local data.
+.env*
+*.local
+src/default-session.json
+*.osc8-session.json
+diag.txt
+# Build inputs Vercel doesn't need (the wasm is prebuilt and checked in).
+engine/target
+.spec01
+node_modules
+dist
+agent-runs

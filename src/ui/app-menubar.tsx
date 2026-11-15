@@ -22,7 +22,7 @@ import { onSoundChange, setSoundEnabled, soundEnabled } from "@/lib/sound"
 import { defaultPatch } from "@/engine/patch"
 import { canRedo, canUndo, redo, replacePatch, setPattern, setTransport, undo, useStore } from "@/state/store"
 import { exportPatch, importPatch } from "@/state/patch-files"
-import { clearStartup, saveStartup } from "@/state/startup"
+import { clearStartup, exportSession, saveStartup } from "@/state/startup"
 import { notify } from "@/components/ui/toaster"
 import { loadPresetById, PRESETS_BY_CATEGORY, stepPreset } from "./preset-state"
 import { pickMidiFile } from "@/midi/open"
@@ -98,6 +98,9 @@ export function AppMenubar({ engine, onOpenKeys, onError, onNotice = (title, des
         return saveStartup()
           ? onNotice?.("Saved as startup default", "OSC-8 will open with this sound, pattern, beat and tempo in this browser.")
           : onError?.("Couldn't save: this browser blocks local storage.")
+      case "export-session":
+        exportSession()
+        return onNotice?.("Session exported", "Move it to src/default-session.json to build it in as your app's default.")
       case "reset-startup":
         clearStartup()
         return onNotice?.("Startup default reset", "OSC-8 will open with the factory demo next time.")
@@ -142,6 +145,7 @@ export function AppMenubar({ engine, onOpenKeys, onError, onNotice = (title, des
               "-",
               { value: "save-startup", label: "Save as startup default" },
               { value: "reset-startup", label: "Reset startup default" },
+              { value: "export-session", label: "Export session…" },
               "-",
               { value: "save-project", label: "Save project", disabled: true, hint: "Coming in M4" },
               { value: "export-wav", label: "Export WAV…", disabled: true, hint: "Coming in M4" },

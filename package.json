@@ -7,11 +7,12 @@
   "scripts": {
     "dev": "vite",
     "build:wasm": "node scripts/build-wasm.mjs",
-    "build": "pnpm build:wasm && tsc -b && vite build",
+    "build": "pnpm build:wasm && pnpm build:web",
     "lint": "oxlint",
     "test": "vitest run",
     "test:rust": "cargo test --manifest-path engine/Cargo.toml",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:web": "tsc -b && vite build"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.105",
@@ -37,5 +38,8 @@
     "typescript": "~7.0.2",
     "vite": "^8.3.8",
     "vitest": "^5.1.0"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

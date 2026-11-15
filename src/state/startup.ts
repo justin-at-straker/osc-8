@@ -51,12 +51,29 @@ const isPattern = (p: unknown): p is Pattern =>
 const isDrumPattern = (p: unknown): p is DrumPattern =>
   !!p && typeof p === "object" && typeof (p as DrumPattern).steps === "number" && Array.isArray((p as DrumPattern).hits)
 
+/** Download the current session as a `.osc8-session.json` file (sound, patterns, kit, tempo). */
+export function exportSession(name = "session") {
+  const blob = new Blob([JSON.stringify(captureStartup(), null, 2)], { type: "application/json" })
+  const url = URL.createObjectURL(blob)
+  const a = Object.assign(document.createElement("a"), { href: url, download: `${name}.osc8-session.json` })
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
 /** The saved session, validated, or null if there is none or it no longer fits the schema. */
 export function loadStartup(): StartupState | null {
   try {
-    const raw = localStorage.getItem(KEY)
-    if (!raw) return null
-    const data = JSON.parse(raw) as Partial<StartupState>
+    return parseSession(localStorage.getItem(KEY))
+  } catch {
+    return null
+  }
+}
+
+/** Validate session data (a JSON string or an already-parsed object); null if it doesn't fit the schema. */
+export function parseSession(input: string | unknown | null): StartupState | null {
+  try {
+    if (input === null || input === undefined) return null
+    const data = (typeof input === "string" ? JSON.parse(input) : input) as Partial<StartupState>
     const patch = Patch.safeParse(data.patch)
     const kit = DrumKit.safeParse(data.drums?.kit)
     if (!patch.success || !kit.success || !isPattern(data.pattern) || !isDrumPattern(data.drums?.pattern)) return null
