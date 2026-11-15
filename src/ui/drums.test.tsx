@@ -66,7 +66,8 @@ describe("808 grid", () => {
   })
 
   it("a drag that starts on a hit erases", () => {
-    act(() => setDrumPattern(DEMO_DRUMS, "load"))
+    const evenHats = [0, 2, 4, 6, 8, 10, 12, 14].map((step) => ({ step, voice: "closedHat" as const, velocity: 0.6, accent: false }))
+    act(() => setDrumPattern({ steps: 16, hits: evenHats }, "load"))
     render(<DrumGrid seed={false} />)
     const start = cell("Closed hat, step 1")
     fireEvent.pointerDown(start, { button: 0, pointerId: 1 })

@@ -307,7 +307,7 @@ export const FACTORY_PRESETS: Patch[] = [
   }),
 ]
 
-/** The patch loaded at startup: soft, warm keys that suit the default melody. */
-export const DEFAULT_PRESET_ID = "factory/dusty-rhodes"
+/** The patch loaded at startup: the big unison lead the default riff is written for. */
+export const DEFAULT_PRESET_ID = "factory/super-saw"
 
 export const presetCategory = (p: Patch) => p.name.slice(0, 2) as PresetCategory

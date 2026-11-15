@@ -109,13 +109,13 @@ export function kitToParams(kit: DrumKit): [number, number][] {
   return out
 }
 
-/** A starter beat so the 808 track plays something when first opened. */
+/** A starter beat so the 808 track plays something: four-on-the-floor house under the default riff. */
 export const DEMO_DRUMS: DrumPattern = {
   steps: 16,
   hits: [
-    ...[0, 6, 10].map((step) => ({ step, voice: "kick" as const, velocity: 0.9, accent: step === 0 })),
-    ...[4, 12].map((step) => ({ step, voice: "snare" as const, velocity: 0.85, accent: false })),
-    ...[0, 2, 4, 6, 8, 10, 12, 14].map((step) => ({ step, voice: "closedHat" as const, velocity: step % 4 === 0 ? 0.8 : 0.55, accent: false })),
-    { step: 14, voice: "openHat" as const, velocity: 0.6, accent: false },
+    ...[0, 4, 8, 12].map((step) => ({ step, voice: "kick" as const, velocity: 0.95, accent: step === 0 })),
+    ...[4, 12].map((step) => ({ step, voice: "clap" as const, velocity: 0.8, accent: false })),
+    ...[1, 3, 5, 7, 9, 11, 13, 15].map((step) => ({ step, voice: "closedHat" as const, velocity: step % 4 === 3 ? 0.55 : 0.4, accent: false })),
+    ...[2, 6, 10, 14].map((step) => ({ step, voice: "openHat" as const, velocity: 0.6, accent: false })),
   ],
 }
