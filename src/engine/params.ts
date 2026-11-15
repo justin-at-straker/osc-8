@@ -4,11 +4,42 @@
 import type { Patch } from "./patch"
 import { BUILTIN_TABLES, DELAY_TIMES, DIST_TYPES, LFO_SHAPES, Lfo, MOD_SOURCES } from "./patch"
 
+const SUB_SHAPES = ["sine", "triangle", "square"] as const
+
+function tableIndex(t: Patch["oscA"]["table"]) {
+  return t.kind === "builtin" ? Math.max(0, BUILTIN_TABLES.indexOf(t.name as never)) : 0
+}
+
+/**
+ * Per-oscillator voice params, 9 IDs from `base`: enabled (osc A only; osc B has
+ * its own at 140), pan, unison (1..16 voices), detune (0..1 = up to +-1 semitone
+ * spread across the stack), blend (0 = center voice only .. 1 = side voices
+ * equal), spread (0 mono .. 1 full stereo width), phase (0..1 start phase),
+ * randomPhase (0 = all voices start at `phase` .. 1 = fully random), toFilter
+ * (0 = bypasses the filter).
+ */
+function oscParams(osc: "oscA" | "oscB", base: number) {
+  const o = (p: Patch) => p[osc]
+  const rows = [
+    ...(osc === "oscA" ? ([[base, `${osc}.enabled`, (p: Patch) => (o(p).enabled ? 1 : 0)]] as const) : []),
+    [osc === "oscA" ? base + 1 : base, `${osc}.pan`, (p: Patch) => o(p).pan],
+    [osc === "oscA" ? base + 2 : base + 1, `${osc}.unison`, (p: Patch) => o(p).unison],
+    [osc === "oscA" ? base + 3 : base + 2, `${osc}.detune`, (p: Patch) => o(p).detune],
+    [osc === "oscA" ? base + 4 : base + 3, `${osc}.blend`, (p: Patch) => o(p).blend],
+    [osc === "oscA" ? base + 5 : base + 4, `${osc}.spread`, (p: Patch) => o(p).spread],
+    [osc === "oscA" ? base + 6 : base + 5, `${osc}.phase`, (p: Patch) => o(p).phase],
+    [osc === "oscA" ? base + 7 : base + 6, `${osc}.randomPhase`, (p: Patch) => o(p).randomPhase],
+    [osc === "oscA" ? base + 8 : base + 7, `${osc}.toFilter`, (p: Patch) => (o(p).toFilter ? 1 : 0)],
+  ] as const
+  return rows as readonly (readonly [number, string, (p: Patch) => number])[]
+}
+
 export const PARAMS = [
   // id, key, getter. M1 wires these; later milestones append.
   [0, "oscA.table", (p: Patch) => (p.oscA.table.kind === "builtin" ? Math.max(0, BUILTIN_TABLES.indexOf(p.oscA.table.name as never)) : 0)],
   [1, "oscA.position", (p: Patch) => p.oscA.position],
-  [2, "oscA.level", (p: Patch) => (p.oscA.enabled ? p.oscA.level : 0)],
+  // Raw level; the engine gates the oscillator with oscA.enabled (131), so a level mod route can't un-mute it.
+  [2, "oscA.level", (p: Patch) => p.oscA.level],
   [3, "oscA.octave", (p: Patch) => p.oscA.octave],
   [4, "oscA.semi", (p: Patch) => p.oscA.semi],
   [5, "oscA.fine", (p: Patch) => p.oscA.fine],
@@ -47,6 +78,25 @@ export const PARAMS = [
   [36, "fx.eq.low", (p: Patch) => p.fx.eq.low], // dB, -12..12
   [37, "fx.eq.mid", (p: Patch) => p.fx.eq.mid],
   [38, "fx.eq.high", (p: Patch) => p.fx.eq.high],
+  // IDs 39..130 are modulation (generated below). Sound sources continue at 131.
+  ...oscParams("oscA", 131),
+  [140, "oscB.enabled", (p: Patch) => (p.oscB.enabled ? 1 : 0)],
+  [141, "oscB.table", (p: Patch) => tableIndex(p.oscB.table)],
+  [142, "oscB.position", (p: Patch) => p.oscB.position],
+  [143, "oscB.level", (p: Patch) => p.oscB.level],
+  [144, "oscB.octave", (p: Patch) => p.oscB.octave],
+  [145, "oscB.semi", (p: Patch) => p.oscB.semi],
+  [146, "oscB.fine", (p: Patch) => p.oscB.fine],
+  ...oscParams("oscB", 147),
+  // 155 unused.
+  [156, "sub.enabled", (p: Patch) => (p.sub.enabled ? 1 : 0)],
+  [157, "sub.level", (p: Patch) => p.sub.level],
+  [158, "sub.octave", (p: Patch) => p.sub.octave], // -2..0, relative to osc A's octave
+  [159, "sub.shape", (p: Patch) => SUB_SHAPES.indexOf(p.sub.shape)], // sine, triangle, square
+  [160, "noise.enabled", (p: Patch) => (p.noise.enabled ? 1 : 0)],
+  [161, "noise.level", (p: Patch) => p.noise.level],
+  [162, "noise.color", (p: Patch) => p.noise.color], // 0 dark (brown-ish) .. 0.5 white .. 1 bright (blue-ish)
+  [163, "noise.toFilter", (p: Patch) => (p.noise.toFilter ? 1 : 0)],
 ] as const
 
 export type ParamKey = (typeof PARAMS)[number][1]
@@ -93,6 +143,19 @@ export const MOD_TARGETS: Record<string, { min: number; max: number; log?: boole
   "oscA.level": { min: 0, max: 1 },
   "oscA.semi": { min: -24, max: 24 }, // pitch modulation in semitones (vibrato, risers)
   "oscA.fine": { min: -100, max: 100 },
+  "oscA.pan": { min: -1, max: 1 },
+  "oscA.detune": { min: 0, max: 1 },
+  "oscA.blend": { min: 0, max: 1 },
+  "oscA.spread": { min: 0, max: 1 },
+  "oscB.position": { min: 0, max: 1 },
+  "oscB.level": { min: 0, max: 1 },
+  "oscB.pan": { min: -1, max: 1 },
+  "oscB.semi": { min: -24, max: 24 },
+  "oscB.fine": { min: -100, max: 100 },
+  "oscB.detune": { min: 0, max: 1 },
+  "sub.level": { min: 0, max: 1 },
+  "noise.level": { min: 0, max: 1 },
+  "noise.color": { min: 0, max: 1 },
   "filter.cutoff": { min: 20, max: 20000, log: true },
   "filter.resonance": { min: 0, max: 1 },
   "master.volume": { min: 0, max: 1 },
